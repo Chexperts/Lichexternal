@@ -23,3 +23,16 @@ updates:
       - "Update"
     commit-message:
       prefix: "update(actions)"
+
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 255
+    cooldown:
+      default-days: 1
+    labels:
+      - "Update"
+    commit-message:
+      prefix: "update(cargo)"
+
