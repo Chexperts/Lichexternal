@@ -28,14 +28,19 @@
         "aarch64-darwin"
         "x86_64-darwin"
       ];
-    in
-    flake-utils.lib.eachSystem supportedSystems (
-      system:
-      let
-        pkgs = import nixpkgs {
-          hostSystem = system;
+
+      pkgsFor =
+        system:
+        import nixpkgs {
+          inherit system;
           overlays = [ (import rust-overlay) ];
         };
+    in
+    nixpkgs.lib.recursiveUpdate
+      (flake-utils.lib.eachSystem supportedSystems (
+        system:
+        let
+          pkgs = pkgsFor system;
 
         inherit (pkgs) lib;
 
@@ -122,23 +127,15 @@
             gh
           ];
         };
-      }
-    )
-    // {
-      # Target-indexed packages mapping
-      packages = {
-        x86_64-windows.default =
-          let
-            pkgs = import nixpkgs {
-              hostSystem = "x86_64-linux";
-              overlays = [ (import rust-overlay) ];
-            };
-          in
-          self.packages.x86_64-linux.windows;
-      };
+      }))
+      {
+        # Target-indexed packages mapping
+        packages = {
+          x86_64-windows.default = self.packages.x86_64-linux.windows;
+        };
 
-      # NixOS & Home Manager modules
-      nixosModules.default = import ./nix/modules/nixos.nix self;
-      homeManagerModules.default = import ./nix/modules/home-manager.nix self;
-    };
+        # NixOS & Home Manager modules
+        nixosModules.default = import ./nix/modules/nixos.nix self;
+        homeManagerModules.default = import ./nix/modules/home-manager.nix self;
+      };
 }

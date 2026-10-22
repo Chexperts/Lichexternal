@@ -10,3 +10,6 @@ extern crate alloc;
 
 /// Current version of the lichexternal-core crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+pub mod models;
+pub use models::*;
