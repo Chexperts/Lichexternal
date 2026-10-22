@@ -652,6 +652,10 @@ dependencies = [
  "clap",
  "interprocess",
  "lichexternal-core",
+ "lichexternal-daemon",
+ "reqwest",
+ "serde",
+ "serde_json",
  "tabled",
  "tokio",
 ]
