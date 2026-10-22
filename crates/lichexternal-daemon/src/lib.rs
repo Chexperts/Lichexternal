@@ -2,4 +2,5 @@
 
 pub mod backend;
 pub mod broker;
+pub mod ipc;
 pub mod supervisor;
