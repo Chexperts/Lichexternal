@@ -679,6 +679,8 @@ dependencies = [
  "interprocess",
  "lichexternal-core",
  "reqwest",
+ "serde",
+ "serde_json",
  "thiserror",
  "tokio",
  "tokio-util",
