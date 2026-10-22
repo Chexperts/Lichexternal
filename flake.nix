@@ -26,7 +26,6 @@
         "x86_64-linux"
         "aarch64-linux"
         "aarch64-darwin"
-        "x86_64-darwin"
       ];
 
       pkgsFor =
@@ -66,7 +65,7 @@
           strictDeps = true;
           buildInputs =
             [ ]
-            ++ lib.optionals pkgs.stdenv.isDarwin [
+            ++ lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
               pkgs.darwin.apple_sdk.frameworks.Security
               pkgs.darwin.apple_sdk.frameworks.SystemConfiguration
             ];
@@ -83,42 +82,39 @@
           }
         );
 
-        # Windows cross-compilation package via MinGW
-        mingwPkgs = pkgs.pkgsCross.mingwW64;
-        craneLibWindows = (crane.mkLib mingwPkgs).overrideToolchain rustToolchain;
-        windowsArtifacts = craneLibWindows.buildDepsOnly (
-          commonArgs
-          // {
-            CARGO_BUILD_TARGET = "x86_64-pc-windows-gnu";
-            depsBuildBuild = [
-              mingwPkgs.stdenv.cc
-              mingwPkgs.windows.pthreads
-            ];
-            nativeBuildInputs = [ mingwPkgs.stdenv.cc ];
-          }
-        );
-        windowsPackage = craneLibWindows.buildPackage (
-          commonArgs
-          // {
-            cargoArtifacts = windowsArtifacts;
-            CARGO_BUILD_TARGET = "x86_64-pc-windows-gnu";
-            depsBuildBuild = [
-              mingwPkgs.stdenv.cc
-              mingwPkgs.windows.pthreads
-            ];
-            nativeBuildInputs = [ mingwPkgs.stdenv.cc ];
-            doCheck = false;
-            pname = "lichexternal-windows";
-            version = "0.1.0";
-          }
+        # Windows cross-compilation package via MinGW (Linux hosts only)
+        windowsPackage = lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux (
+          let
+            mingwPkgs = pkgs.pkgsCross.mingwW64;
+            craneLibWindows = (crane.mkLib mingwPkgs).overrideToolchain (p: rustToolchain);
+            windowsArtifacts = craneLibWindows.buildDepsOnly (
+              commonArgs
+              // {
+                CARGO_BUILD_TARGET = "x86_64-pc-windows-gnu";
+                nativeBuildInputs = [ mingwPkgs.buildPackages.stdenv.cc ];
+                buildInputs = [ mingwPkgs.windows.pthreads ];
+              }
+            );
+          in
+          craneLibWindows.buildPackage (
+            commonArgs
+            // {
+              cargoArtifacts = windowsArtifacts;
+              CARGO_BUILD_TARGET = "x86_64-pc-windows-gnu";
+              nativeBuildInputs = [ mingwPkgs.buildPackages.stdenv.cc ];
+              buildInputs = [ mingwPkgs.windows.pthreads ];
+              doCheck = false;
+              pname = "lichexternal-windows";
+              version = "0.1.0";
+            }
+          )
         );
       in
       {
         packages = {
           default = lichexternal;
           lichexternal = lichexternal;
-          windows = windowsPackage;
-        };
+        } // (lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux { windows = windowsPackage; });
 
         devShells.default = pkgs.mkShell {
           inputsFrom = [ lichexternal ];
