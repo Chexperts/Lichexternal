@@ -21,6 +21,14 @@ pub enum BrokerError {
     #[error("Failed to parse broker response: {0}")]
     Decode(#[from] serde_json::Error),
 
+    /// Stream I/O error writing chunked data.
+    #[error("Stream I/O error: {0}")]
+    Io(#[from] std::io::Error),
+
+    /// Background task join error.
+    #[error("Stream task error: {0}")]
+    Task(#[from] tokio::task::JoinError),
+
     /// Server returned an unhandled error status.
     #[error("Broker returned error HTTP status: {0}")]
     HttpStatus(StatusCode),
@@ -85,6 +93,77 @@ impl BrokerClient {
                 warn!(status = %status, "Broker returned unexpected HTTP status");
                 Err(BrokerError::HttpStatus(status))
             }
+        }
+    }
+
+    /// Open a chunked HTTP stream for transmitting evaluation lines back to the broker.
+    ///
+    /// Endpoint: `POST /api/external-engine/work/{work_id}`
+    pub fn start_work_stream(&self, work_id: &str) -> WorkStreamTransmitter {
+        let url = format!("{}/api/external-engine/work/{}", self.broker_base_url, work_id);
+        let (read_half, write_half) = tokio::io::duplex(65536);
+        let body = reqwest::Body::wrap_stream(tokio_util::io::ReaderStream::new(read_half));
+        let client = self.client.clone();
+        let id_str = work_id.to_string();
+
+        debug!(work_id = %id_str, url = %url, "Opening chunked HTTP stream to broker");
+
+        let http_handle = tokio::spawn(async move {
+            let response = client
+                .post(&url)
+                .header(reqwest::header::CONTENT_TYPE, "text/plain")
+                .body(body)
+                .send()
+                .await?;
+
+            let status = response.status();
+            debug!(work_id = %id_str, status = %status, "Broker work stream request finished");
+            Ok(status)
+        });
+
+        WorkStreamTransmitter {
+            work_id: work_id.to_string(),
+            writer: write_half,
+            http_handle,
+        }
+    }
+}
+
+/// Chunked line transmitter for an active evaluation job.
+pub struct WorkStreamTransmitter {
+    work_id: String,
+    writer: tokio::io::DuplexStream,
+    http_handle: tokio::task::JoinHandle<Result<StatusCode, BrokerError>>,
+}
+
+impl WorkStreamTransmitter {
+    /// Transmit a single UCI output line (`info ...` or `bestmove ...`) to the broker HTTP stream.
+    pub async fn send_line(&mut self, line: &str) -> Result<(), BrokerError> {
+        let trimmed = line.trim();
+        debug!(work_id = %self.work_id, line = %trimmed, "Streaming line to broker");
+
+        use tokio::io::AsyncWriteExt;
+        self.writer.write_all(trimmed.as_bytes()).await?;
+        self.writer.write_all(b"\n").await?;
+        self.writer.flush().await?;
+
+        Ok(())
+    }
+
+    /// Check if the underlying HTTP stream connection has ended or disconnected.
+    #[must_use]
+    pub fn is_stream_active(&self) -> bool {
+        !self.http_handle.is_finished()
+    }
+
+    /// Complete transmission by closing the write channel (sending EOF to HTTP chunked stream).
+    pub async fn finish(self) -> Result<StatusCode, BrokerError> {
+        debug!(work_id = %self.work_id, "Closing stream transmitter and awaiting broker response");
+        drop(self.writer);
+
+        match self.http_handle.await {
+            Ok(result) => result,
+            Err(e) => Err(BrokerError::Task(e)),
         }
     }
 }

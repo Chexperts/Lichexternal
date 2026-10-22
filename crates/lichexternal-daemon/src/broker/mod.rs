@@ -2,4 +2,4 @@
 
 pub mod client;
 
-pub use client::{BrokerClient, BrokerError};
+pub use client::{BrokerClient, BrokerError, WorkStreamTransmitter};
