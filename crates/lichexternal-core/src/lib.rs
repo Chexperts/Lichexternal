@@ -16,3 +16,6 @@ pub use models::*;
 
 pub mod uci;
 pub use uci::*;
+
+pub mod config;
+pub use config::*;

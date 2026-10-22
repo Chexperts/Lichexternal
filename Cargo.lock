@@ -660,10 +660,12 @@ dependencies = [
 name = "lichexternal-core"
 version = "0.1.0"
 dependencies = [
+ "etcetera",
  "memchr",
  "serde",
  "serde_json",
  "thiserror",
+ "toml",
  "ts-rs",
 ]
 
