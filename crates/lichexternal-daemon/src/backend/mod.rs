@@ -2,6 +2,9 @@
 
 use std::future::Future;
 
+pub mod stdio;
+pub use stdio::StdioBackend;
+
 /// Errors arising from engine backend communication.
 #[derive(Debug, thiserror::Error)]
 pub enum BackendError {
@@ -45,5 +48,5 @@ pub trait EngineBackend: Send + Sync {
     }
 
     /// Check if the engine session connection is still alive.
-    fn is_alive(&self) -> bool;
+    fn is_alive(&mut self) -> bool;
 }
