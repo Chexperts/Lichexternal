@@ -8,6 +8,9 @@ pub use stdio::StdioBackend;
 pub mod socket;
 pub use socket::SocketBackend;
 
+pub mod any;
+pub use any::AnyBackend;
+
 /// Errors arising from engine backend communication.
 #[derive(Debug, thiserror::Error)]
 pub enum BackendError {
