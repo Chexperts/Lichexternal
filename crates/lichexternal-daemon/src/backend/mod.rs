@@ -5,6 +5,9 @@ use std::future::Future;
 pub mod stdio;
 pub use stdio::StdioBackend;
 
+pub mod socket;
+pub use socket::SocketBackend;
+
 /// Errors arising from engine backend communication.
 #[derive(Debug, thiserror::Error)]
 pub enum BackendError {
