@@ -13,3 +13,6 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub mod models;
 pub use models::*;
+
+pub mod uci;
+pub use uci::*;
