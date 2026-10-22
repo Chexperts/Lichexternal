@@ -1,0 +1,16 @@
+# Rust / Cargo
+/target/
+**/*.rs.bk
+
+# Nix
+result
+result-*
+.direnv/
+
+# IDE & OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db

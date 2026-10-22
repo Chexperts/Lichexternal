@@ -1,0 +1,22 @@
+[package]
+name = "lichexternal-cli"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "lichexternal"
+path = "src/main.rs"
+
+[dependencies]
+lichexternal-core = { workspace = true }
+clap = { workspace = true }
+anstyle = { workspace = true }
+anstream = { workspace = true }
+tabled = { workspace = true }
+interprocess = { workspace = true, features = ["tokio"] }
+tokio = { workspace = true, features = ["rt", "macros"] }
+anyhow = { workspace = true }

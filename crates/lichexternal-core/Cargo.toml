@@ -1,0 +1,23 @@
+[package]
+name = "lichexternal-core"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+memchr = { workspace = true }
+
+[features]
+default = ["std"]
+std = ["serde/std", "memchr/std"]
+typescript = ["dep:ts-rs"]
+
+[dependencies.ts-rs]
+workspace = true
+optional = true
