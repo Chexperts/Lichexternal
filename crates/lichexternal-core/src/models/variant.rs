@@ -58,17 +58,41 @@ mod tests {
 
     #[test]
     fn test_variant_serialization() {
-        assert_eq!(serde_json::to_string(&UciVariant::Chess).unwrap(), "\"chess\"");
-        assert_eq!(serde_json::to_string(&UciVariant::KingOfTheHill).unwrap(), "\"kingOfTheHill\"");
-        assert_eq!(serde_json::to_string(&UciVariant::RacingKings).unwrap(), "\"racingKings\"");
-        assert_eq!(serde_json::to_string(&UciVariant::ThreeCheck).unwrap(), "\"3check\"");
+        assert_eq!(
+            serde_json::to_string(&UciVariant::Chess).unwrap(),
+            "\"chess\""
+        );
+        assert_eq!(
+            serde_json::to_string(&UciVariant::KingOfTheHill).unwrap(),
+            "\"kingOfTheHill\""
+        );
+        assert_eq!(
+            serde_json::to_string(&UciVariant::RacingKings).unwrap(),
+            "\"racingKings\""
+        );
+        assert_eq!(
+            serde_json::to_string(&UciVariant::ThreeCheck).unwrap(),
+            "\"3check\""
+        );
     }
 
     #[test]
     fn test_variant_deserialization() {
-        assert_eq!(serde_json::from_str::<UciVariant>("\"chess\"").unwrap(), UciVariant::Chess);
-        assert_eq!(serde_json::from_str::<UciVariant>("\"atomic\"").unwrap(), UciVariant::Atomic);
-        assert_eq!(serde_json::from_str::<UciVariant>("\"kingOfTheHill\"").unwrap(), UciVariant::KingOfTheHill);
-        assert_eq!(serde_json::from_str::<UciVariant>("\"3check\"").unwrap(), UciVariant::ThreeCheck);
+        assert_eq!(
+            serde_json::from_str::<UciVariant>("\"chess\"").unwrap(),
+            UciVariant::Chess
+        );
+        assert_eq!(
+            serde_json::from_str::<UciVariant>("\"atomic\"").unwrap(),
+            UciVariant::Atomic
+        );
+        assert_eq!(
+            serde_json::from_str::<UciVariant>("\"kingOfTheHill\"").unwrap(),
+            UciVariant::KingOfTheHill
+        );
+        assert_eq!(
+            serde_json::from_str::<UciVariant>("\"3check\"").unwrap(),
+            UciVariant::ThreeCheck
+        );
     }
 }

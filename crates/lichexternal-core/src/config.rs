@@ -89,7 +89,9 @@ impl EngineConfig {
     /// Validates the engine configuration fields.
     pub fn validate(&self) -> Result<(), ConfigError> {
         if self.id.trim().is_empty() {
-            return Err(ConfigError::Validation(String::from("Engine 'id' cannot be empty")));
+            return Err(ConfigError::Validation(String::from(
+                "Engine 'id' cannot be empty",
+            )));
         }
         if self.provider_secret.trim().is_empty() {
             return Err(ConfigError::Validation(alloc::format!(
@@ -214,7 +216,12 @@ impl Config {
     pub fn default_config_path() -> Option<std::path::PathBuf> {
         use etcetera::base_strategy::{choose_base_strategy, BaseStrategy};
         let strategy = choose_base_strategy().ok()?;
-        Some(strategy.config_dir().join("lichexternal").join("config.toml"))
+        Some(
+            strategy
+                .config_dir()
+                .join("lichexternal")
+                .join("config.toml"),
+        )
     }
 
     /// Resolves the default standard daemon control IPC socket path for the current OS.
@@ -285,12 +292,18 @@ max_hash = 2048
         assert_eq!(sf.max_threads, 16);
         assert_eq!(sf.max_hash, 4096);
         assert_eq!(sf.variants, vec![UciVariant::Chess, UciVariant::Atomic]);
-        assert_eq!(sf.uci_options.get("SyzygyPath").map(|s| s.as_str()), Some("/tablebases"));
+        assert_eq!(
+            sf.uci_options.get("SyzygyPath").map(|s| s.as_str()),
+            Some("/tablebases")
+        );
 
         let ch = &config.engines[1];
         assert_eq!(ch.id, "chexpectimax-socket");
         assert_eq!(ch.backend_type, BackendType::Socket);
-        assert_eq!(ch.socket.as_deref(), Some("/run/user/1000/chexpectimax.sock"));
+        assert_eq!(
+            ch.socket.as_deref(),
+            Some("/run/user/1000/chexpectimax.sock")
+        );
     }
 
     #[test]

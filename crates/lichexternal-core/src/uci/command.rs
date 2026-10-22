@@ -24,10 +24,7 @@ pub enum UciCommand {
     /// Synchronize engine status (`isready`).
     IsReady,
     /// Set an engine option (`setoption name <name> [value <value>]`).
-    SetOption {
-        name: String,
-        value: Option<String>,
-    },
+    SetOption { name: String, value: Option<String> },
     /// Inform engine that the next search will be from a new game (`ucinewgame`).
     UciNewGame,
     /// Set up position on internal board (`position [startpos|fen <fen>] [moves <m1> <m2> ...]`).
@@ -52,7 +49,10 @@ impl UciCommand {
         match self {
             Self::Uci => String::from("uci"),
             Self::IsReady => String::from("isready"),
-            Self::SetOption { name, value: Some(val) } => {
+            Self::SetOption {
+                name,
+                value: Some(val),
+            } => {
                 format!("setoption name {name} value {val}")
             }
             Self::SetOption { name, value: None } => {

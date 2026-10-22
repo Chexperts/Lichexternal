@@ -5,9 +5,9 @@ use tokio::sync::watch;
 use tokio::task::JoinHandle;
 use tracing::info;
 
-use lichexternal_core::config::{BackendType, Config, EngineConfig};
-use crate::broker::BrokerClient;
 use super::session::{EngineSession, SessionState};
+use crate::broker::BrokerClient;
+use lichexternal_core::config::{BackendType, Config, EngineConfig};
 
 /// Snapshot status of an individual engine supervised by the daemon.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -50,7 +50,8 @@ impl SupervisorPool {
         for engine_cfg in &config.engines {
             info!(engine_id = %engine_cfg.id, name = %engine_cfg.name, "Spawning engine supervisor in pool");
 
-            let (mut session, state_rx) = EngineSession::new(engine_cfg.clone(), broker_client.clone());
+            let (mut session, state_rx) =
+                EngineSession::new(engine_cfg.clone(), broker_client.clone());
             let session_shutdown_rx = shutdown_rx.clone();
 
             let handle = tokio::spawn(async move {
@@ -88,7 +89,9 @@ impl SupervisorPool {
                 let (state_str, active_work_id, current_depth) = match state_val {
                     SessionState::Initializing => ("initializing".to_string(), None, None),
                     SessionState::Idle => ("idle".to_string(), None, None),
-                    SessionState::Analyzing { work_id, depth } => ("analyzing".to_string(), Some(work_id), depth),
+                    SessionState::Analyzing { work_id, depth } => {
+                        ("analyzing".to_string(), Some(work_id), depth)
+                    }
                     SessionState::Stopped => ("stopped".to_string(), None, None),
                     SessionState::Error(err) => (format!("error: {err}"), None, None),
                 };

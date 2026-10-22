@@ -5,9 +5,9 @@
 mod ipc_client;
 mod rest_client;
 
+use clap::{Parser, Subcommand};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-use clap::{Parser, Subcommand};
 use tabled::{Table, Tabled};
 
 use lichexternal_core::config::Config;
@@ -221,7 +221,10 @@ async fn main() -> anyhow::Result<()> {
                                 backend: format!("{:?}", e.backend_type).to_lowercase(),
                                 state: e.state,
                                 active_work: e.active_work_id.unwrap_or_else(|| "-".into()),
-                                depth: e.current_depth.map(|d| d.to_string()).unwrap_or_else(|| "-".into()),
+                                depth: e
+                                    .current_depth
+                                    .map(|d| d.to_string())
+                                    .unwrap_or_else(|| "-".into()),
                             })
                             .collect();
 
@@ -271,7 +274,13 @@ async fn main() -> anyhow::Result<()> {
                         UciOutputLine::IdAuthor(a) => author = Some(a.to_string()),
                         UciOutputLine::Option(opt) => {
                             if let Some(opt_name) = opt.strip_prefix("name ") {
-                                options.push(opt_name.split_whitespace().next().unwrap_or_default().to_string());
+                                options.push(
+                                    opt_name
+                                        .split_whitespace()
+                                        .next()
+                                        .unwrap_or_default()
+                                        .to_string(),
+                                );
                             }
                         }
                         _ => {}
@@ -325,7 +334,12 @@ async fn main() -> anyhow::Result<()> {
                             name: e.name,
                             max_threads: e.max_threads,
                             max_hash: e.max_hash,
-                            variants: e.variants.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(", "),
+                            variants: e
+                                .variants
+                                .iter()
+                                .map(|v| v.to_string())
+                                .collect::<Vec<_>>()
+                                .join(", "),
                             has_secret: if e.secret.is_some() { "yes" } else { "no" }.to_string(),
                         })
                         .collect();
@@ -349,7 +363,8 @@ async fn main() -> anyhow::Result<()> {
                     .iter()
                     .map(|v| serde_json::from_str(&format!("\"{v}\"")))
                     .collect();
-                let parsed_variants = parsed_variants.map_err(|e| anyhow::anyhow!("Invalid variant: {e}"))?;
+                let parsed_variants =
+                    parsed_variants.map_err(|e| anyhow::anyhow!("Invalid variant: {e}"))?;
 
                 let req = CreateEngineRequest {
                     name,
@@ -370,7 +385,11 @@ async fn main() -> anyhow::Result<()> {
                     println!("\nIMPORTANT: Add this provider_secret to your config.toml under [[engines]]!");
                 }
             }
-            EngineSubcommand::Get { id, token, base_url } => {
+            EngineSubcommand::Get {
+                id,
+                token,
+                base_url,
+            } => {
                 let token = resolve_token(token)?;
                 let client = LichessRestClient::new(base_url, token);
                 let profile = client.get_engine(&id).await?;
@@ -385,7 +404,11 @@ async fn main() -> anyhow::Result<()> {
                     println!("  Secret:      {}", sec);
                 }
             }
-            EngineSubcommand::Delete { id, token, base_url } => {
+            EngineSubcommand::Delete {
+                id,
+                token,
+                base_url,
+            } => {
                 let token = resolve_token(token)?;
                 let client = LichessRestClient::new(base_url, token);
                 client.delete_engine(&id).await?;

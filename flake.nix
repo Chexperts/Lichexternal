@@ -2,136 +2,185 @@
   description = "Lichexternal: Cross-platform asynchronous service bridging Lichess External Engine API with chess engines";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs.url = "https://channels.nixos.org/nixos-unstable/nixexprs.tar.xz";
+
+    systems.url = "github:nix-systems/default";
+
+    flake-parts = {
+      url = "github:hercules-ci/flake-parts";
+      inputs.nixpkgs-lib.follows = "nixpkgs";
+    };
+
+    git-hooks = {
+      url = "github:cachix/git-hooks.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    flake-utils.url = "github:numtide/flake-utils";
+
     crane.url = "github:ipetkov/crane";
   };
 
   outputs =
-    {
-      self,
-      nixpkgs,
-      rust-overlay,
-      flake-utils,
-      crane,
-      ...
-    }:
-    let
-      # Supported host systems for native evaluation
-      supportedSystems = [
-        "x86_64-linux"
-        "aarch64-linux"
-        "aarch64-darwin"
+    inputs@{ flake-parts, ... }:
+    flake-parts.lib.mkFlake { inherit inputs; } {
+      imports = [
+        inputs.git-hooks.flakeModule
       ];
 
-      pkgsFor =
-        system:
-        import nixpkgs {
-          inherit system;
-          overlays = [ (import rust-overlay) ];
-        };
-    in
-    nixpkgs.lib.recursiveUpdate
-      (flake-utils.lib.eachSystem supportedSystems (
-        system:
+      systems = import inputs.systems;
+
+      flake = {
+        nixosModules.default = import ./nix/modules/nixos.nix inputs.self;
+        homeManagerModules.default = import ./nix/modules/home-manager.nix inputs.self;
+      };
+
+      perSystem =
+        {
+          config,
+          system,
+          pkgs,
+          lib,
+          ...
+        }:
         let
-          pkgs = pkgsFor system;
+          rustToolchain = pkgs.rust-bin.stable.latest.default.override {
+            targets = [
+              "wasm32-unknown-unknown"
+              "x86_64-pc-windows-gnu"
+              "x86_64-unknown-linux-gnu"
+            ];
+            extensions = [
+              "rust-src"
+              "rust-analyzer"
+              "clippy"
+              "rustfmt"
+            ];
+          };
 
-        inherit (pkgs) lib;
+          craneLib = (inputs.crane.mkLib pkgs).overrideToolchain rustToolchain;
 
-        rustToolchain = pkgs.rust-bin.stable.latest.default.override {
-          targets = [
-            "wasm32-unknown-unknown"
-            "x86_64-pc-windows-gnu"
-            "x86_64-unknown-linux-gnu"
-          ];
-          extensions = [
-            "rust-src"
-            "rust-analyzer"
-            "clippy"
-          ];
-        };
+          src = craneLib.cleanCargoSource ./.;
 
-        craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
-
-        src = craneLib.cleanCargoSource ./.;
-
-        commonArgs = {
-          inherit src;
-          strictDeps = true;
-          buildInputs =
-            [ ]
-            ++ lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
+          commonArgs = {
+            inherit src;
+            strictDeps = true;
+            buildInputs = lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
               pkgs.darwin.apple_sdk.frameworks.Security
               pkgs.darwin.apple_sdk.frameworks.SystemConfiguration
             ];
-        };
+          };
 
-        cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+          cargoArtifacts = craneLib.buildDepsOnly commonArgs;
 
-        lichexternal = craneLib.buildPackage (
-          commonArgs
-          // {
-            inherit cargoArtifacts;
-            pname = "lichexternal";
-            version = "0.1.0";
-          }
-        );
+          lichexternal = craneLib.buildPackage (
+            commonArgs
+            // {
+              inherit cargoArtifacts;
+              pname = "lichexternal";
+              version = "0.1.0";
+            }
+          );
 
-        # Windows cross-compilation package via MinGW (Linux hosts only)
-        windowsPackage = lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux (
-          let
-            mingwPkgs = pkgs.pkgsCross.mingwW64;
-            craneLibWindows = (crane.mkLib mingwPkgs).overrideToolchain (p: rustToolchain);
-            windowsArtifacts = craneLibWindows.buildDepsOnly (
+          # Windows cross-compilation package via MinGW (Linux hosts only)
+          windowsPackage = lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux (
+            let
+              mingwPkgs = pkgs.pkgsCross.mingwW64;
+              craneLibWindows = (inputs.crane.mkLib mingwPkgs).overrideToolchain (_: rustToolchain);
+              windowsArtifacts = craneLibWindows.buildDepsOnly (
+                commonArgs
+                // {
+                  CARGO_BUILD_TARGET = "x86_64-pc-windows-gnu";
+                  nativeBuildInputs = [ mingwPkgs.buildPackages.stdenv.cc ];
+                  buildInputs = [ mingwPkgs.windows.pthreads ];
+                }
+              );
+            in
+            craneLibWindows.buildPackage (
               commonArgs
               // {
+                cargoArtifacts = windowsArtifacts;
                 CARGO_BUILD_TARGET = "x86_64-pc-windows-gnu";
                 nativeBuildInputs = [ mingwPkgs.buildPackages.stdenv.cc ];
                 buildInputs = [ mingwPkgs.windows.pthreads ];
+                doCheck = false;
+                pname = "lichexternal-windows";
+                version = "0.1.0";
               }
-            );
-          in
-          craneLibWindows.buildPackage (
-            commonArgs
-            // {
-              cargoArtifacts = windowsArtifacts;
-              CARGO_BUILD_TARGET = "x86_64-pc-windows-gnu";
-              nativeBuildInputs = [ mingwPkgs.buildPackages.stdenv.cc ];
-              buildInputs = [ mingwPkgs.windows.pthreads ];
-              doCheck = false;
-              pname = "lichexternal-windows";
-              version = "0.1.0";
-            }
-          )
-        );
-      in
-      {
-        packages = {
-          default = lichexternal;
-          lichexternal = lichexternal;
-        } // (lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux { windows = windowsPackage; });
+            )
+          );
+        in
+        {
+          _module.args.pkgs = import inputs.nixpkgs {
+            inherit system;
+            overlays = [ (import inputs.rust-overlay) ];
+          };
 
-        devShells.default = pkgs.mkShell {
-          inputsFrom = [ lichexternal ];
-          packages = with pkgs; [
-            rustToolchain
-            gh
-          ];
-        };
-      }))
-      {
-        # Target-indexed packages mapping
-        packages = {
-          x86_64-windows.default = self.packages.x86_64-linux.windows;
-        };
+          pre-commit.settings.hooks = {
+            nixfmt.enable = true;
+            deadnix.enable = true;
+            statix.enable = true;
+            actionlint.enable = true;
+            rustfmt.enable = true;
+          };
 
-        # NixOS & Home Manager modules
-        nixosModules.default = import ./nix/modules/nixos.nix self;
-        homeManagerModules.default = import ./nix/modules/home-manager.nix self;
-      };
+          # Self-correcting formatter script (runs hooks and handles clean 2nd-pass)
+          formatter =
+            let
+              cfg = config.pre-commit.settings;
+            in
+            pkgs.writeShellScriptBin "pre-commit-fmt" ''
+              set -euo pipefail
+              export PATH="${
+                pkgs.lib.makeBinPath (
+                  [
+                    cfg.gitPackage
+                    cfg.package
+                  ]
+                  ++ cfg.enabledPackages
+                )
+              }:$PATH"
+
+              exitcode=0
+              if [ "$#" -gt 0 ]; then
+                ${pkgs.lib.getExe cfg.package} run -c ${cfg.configFile} --files "$@" || exitcode=$?
+              else
+                if [ -n "''${PRJ_ROOT:-}" ]; then
+                  cd "$PRJ_ROOT"
+                fi
+                ${pkgs.lib.getExe cfg.package} run -c ${cfg.configFile} --all-files || exitcode=$?
+              fi
+
+              if [ "$exitcode" -eq 1 ]; then
+                if [ "$#" -gt 0 ]; then
+                  ${pkgs.lib.getExe cfg.package} run -c ${cfg.configFile} --files "$@"
+                else
+                  ${pkgs.lib.getExe cfg.package} run -c ${cfg.configFile} --all-files
+                fi
+              else
+                exit "$exitcode"
+              fi
+            '';
+
+          packages = {
+            inherit lichexternal;
+            default = lichexternal;
+          }
+          // (lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux { windows = windowsPackage; });
+
+          devShells.default = pkgs.mkShell {
+            inputsFrom = [
+              config.pre-commit.devShell
+              lichexternal
+            ];
+            packages = with pkgs; [
+              rustToolchain
+              gh
+            ];
+          };
+        };
+    };
 }

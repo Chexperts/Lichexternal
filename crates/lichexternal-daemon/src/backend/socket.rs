@@ -68,20 +68,14 @@ impl EngineBackend for SocketBackend {
                 self.alive = false;
                 BackendError::Io(e)
             })?;
-        self.write_half
-            .write_all(b"\n")
-            .await
-            .map_err(|e| {
-                self.alive = false;
-                BackendError::Io(e)
-            })?;
-        self.write_half
-            .flush()
-            .await
-            .map_err(|e| {
-                self.alive = false;
-                BackendError::Io(e)
-            })?;
+        self.write_half.write_all(b"\n").await.map_err(|e| {
+            self.alive = false;
+            BackendError::Io(e)
+        })?;
+        self.write_half.flush().await.map_err(|e| {
+            self.alive = false;
+            BackendError::Io(e)
+        })?;
 
         Ok(())
     }

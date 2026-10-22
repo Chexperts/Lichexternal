@@ -44,7 +44,10 @@ pub struct EngineSession {
 
 impl EngineSession {
     /// Creates a new engine session for the given engine profile configuration.
-    pub fn new(config: EngineConfig, broker_client: BrokerClient) -> (Self, watch::Receiver<SessionState>) {
+    pub fn new(
+        config: EngineConfig,
+        broker_client: BrokerClient,
+    ) -> (Self, watch::Receiver<SessionState>) {
         let (state_tx, state_rx) = watch::channel(SessionState::Initializing);
         let session = Self {
             config,
@@ -137,21 +140,23 @@ impl EngineSession {
 
         loop {
             match backend.read_line().await? {
-                Some(line) => {
-                    match parse_uci_line(&line) {
-                        UciOutputLine::UciOk => break,
-                        UciOutputLine::IdName(name) => engine_name = Some(name.to_string()),
-                        UciOutputLine::IdAuthor(author) => engine_author = Some(author.to_string()),
-                        UciOutputLine::Option(opt) => {
-                            if let Some(opt_name) = opt.strip_prefix("name ") {
-                                let name = opt_name.split_whitespace().next().unwrap_or_default();
-                                available_options.push(name.to_string());
-                            }
+                Some(line) => match parse_uci_line(&line) {
+                    UciOutputLine::UciOk => break,
+                    UciOutputLine::IdName(name) => engine_name = Some(name.to_string()),
+                    UciOutputLine::IdAuthor(author) => engine_author = Some(author.to_string()),
+                    UciOutputLine::Option(opt) => {
+                        if let Some(opt_name) = opt.strip_prefix("name ") {
+                            let name = opt_name.split_whitespace().next().unwrap_or_default();
+                            available_options.push(name.to_string());
                         }
-                        _ => {}
                     }
+                    _ => {}
+                },
+                None => {
+                    return Err(anyhow::anyhow!(
+                        "Engine process disconnected during UCI handshake"
+                    ))
                 }
-                None => return Err(anyhow::anyhow!("Engine process disconnected during UCI handshake")),
             }
         }
 
@@ -164,10 +169,13 @@ impl EngineSession {
         // Initialize static options
         for (name, value) in &self.config.uci_options {
             backend
-                .send_command(&UciCommand::SetOption {
-                    name: name.clone(),
-                    value: Some(value.clone()),
-                }.to_uci_line())
+                .send_command(
+                    &UciCommand::SetOption {
+                        name: name.clone(),
+                        value: Some(value.clone()),
+                    }
+                    .to_uci_line(),
+                )
                 .await?;
         }
 
@@ -177,7 +185,11 @@ impl EngineSession {
             match backend.read_line().await? {
                 Some(line) if parse_uci_line(&line) == UciOutputLine::ReadyOk => break,
                 Some(_) => continue,
-                None => return Err(anyhow::anyhow!("Engine process disconnected waiting for readyok")),
+                None => {
+                    return Err(anyhow::anyhow!(
+                        "Engine process disconnected waiting for readyok"
+                    ))
+                }
             }
         }
 
@@ -251,33 +263,45 @@ impl EngineSession {
 
         let threads = min(work.threads, self.config.max_threads);
         backend
-            .send_command(&UciCommand::SetOption {
-                name: "Threads".into(),
-                value: Some(threads.to_string()),
-            }.to_uci_line())
+            .send_command(
+                &UciCommand::SetOption {
+                    name: "Threads".into(),
+                    value: Some(threads.to_string()),
+                }
+                .to_uci_line(),
+            )
             .await?;
 
         let hash = min(work.hash, self.config.max_hash);
         backend
-            .send_command(&UciCommand::SetOption {
-                name: "Hash".into(),
-                value: Some(hash.to_string()),
-            }.to_uci_line())
+            .send_command(
+                &UciCommand::SetOption {
+                    name: "Hash".into(),
+                    value: Some(hash.to_string()),
+                }
+                .to_uci_line(),
+            )
             .await?;
 
         backend
-            .send_command(&UciCommand::SetOption {
-                name: "MultiPV".into(),
-                value: Some(work.multi_pv.to_string()),
-            }.to_uci_line())
+            .send_command(
+                &UciCommand::SetOption {
+                    name: "MultiPV".into(),
+                    value: Some(work.multi_pv.to_string()),
+                }
+                .to_uci_line(),
+            )
             .await?;
 
         if work.variant != UciVariant::Chess {
             backend
-                .send_command(&UciCommand::SetOption {
-                    name: "UCI_Variant".into(),
-                    value: Some(work.variant.as_uci_str().into()),
-                }.to_uci_line())
+                .send_command(
+                    &UciCommand::SetOption {
+                        name: "UCI_Variant".into(),
+                        value: Some(work.variant.as_uci_str().into()),
+                    }
+                    .to_uci_line(),
+                )
                 .await?;
         }
 
@@ -287,7 +311,11 @@ impl EngineSession {
             match backend.read_line().await? {
                 Some(line) if parse_uci_line(&line) == UciOutputLine::ReadyOk => break,
                 Some(_) => continue,
-                None => return Err(anyhow::anyhow!("Engine disconnected waiting for readyok before position")),
+                None => {
+                    return Err(anyhow::anyhow!(
+                        "Engine disconnected waiting for readyok before position"
+                    ))
+                }
             }
         }
 

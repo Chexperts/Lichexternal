@@ -1,13 +1,13 @@
 //! Cross-platform local daemon IPC control server using `interprocess`.
 
-use std::path::PathBuf;
-use std::sync::Arc;
-use interprocess::local_socket::ListenerOptions;
 use interprocess::local_socket::traits::tokio::Listener as _;
+use interprocess::local_socket::ListenerOptions;
 use interprocess::local_socket::ToFsName;
 #[cfg(windows)]
 use interprocess::local_socket::ToNsName;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::watch;
 use tracing::{debug, info, warn};
@@ -91,7 +91,9 @@ pub async fn run_ipc_server(
     let listener = ListenerOptions::new()
         .name(name)
         .create_tokio()
-        .map_err(|e| anyhow::anyhow!("Failed to bind local IPC listener at '{}': {e}", socket_str))?;
+        .map_err(|e| {
+            anyhow::anyhow!("Failed to bind local IPC listener at '{}': {e}", socket_str)
+        })?;
 
     while !*shutdown_rx.borrow() {
         tokio::select! {

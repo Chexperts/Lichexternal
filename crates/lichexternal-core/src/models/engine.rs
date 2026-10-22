@@ -113,7 +113,10 @@ mod tests {
         assert_eq!(profile.name, "Stockfish 19");
         assert_eq!(profile.max_threads, 16);
         assert_eq!(profile.max_hash, 4096);
-        assert_eq!(profile.variants, vec![UciVariant::Chess, UciVariant::Atomic]);
+        assert_eq!(
+            profile.variants,
+            vec![UciVariant::Chess, UciVariant::Atomic]
+        );
         assert_eq!(profile.secret.as_deref(), Some("prov_sec_xyz"));
     }
 

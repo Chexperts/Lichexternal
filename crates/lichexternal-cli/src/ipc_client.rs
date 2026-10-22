@@ -1,17 +1,20 @@
 //! IPC client connecting to a running `lichexternald` daemon.
 
-use std::path::Path;
 use interprocess::local_socket::tokio::Stream;
 use interprocess::local_socket::traits::tokio::Stream as _;
 use interprocess::local_socket::ToFsName;
 #[cfg(windows)]
 use interprocess::local_socket::ToNsName;
+use std::path::Path;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 use lichexternal_daemon::ipc::{IpcRequest, IpcResponse};
 
 /// Transmit a request to the daemon IPC socket and await the response.
-pub async fn call_daemon_ipc(socket_path: &Path, request: &IpcRequest) -> Result<IpcResponse, anyhow::Error> {
+pub async fn call_daemon_ipc(
+    socket_path: &Path,
+    request: &IpcRequest,
+) -> Result<IpcResponse, anyhow::Error> {
     let socket_str = socket_path.to_string_lossy().to_string();
 
     #[cfg(windows)]

@@ -63,8 +63,8 @@ async fn main() -> anyhow::Result<()> {
     let config = Config::load_from_path(&config_file)?;
 
     // Initialize logging
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new(&config.log_level));
+    let filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(&config.log_level));
 
     tracing_subscriber::fmt()
         .with_env_filter(filter)
@@ -92,7 +92,14 @@ async fn main() -> anyhow::Result<()> {
     let ipc_server_shutdown_rx = ipc_shutdown_rx.clone();
 
     let ipc_task = tokio::spawn(async move {
-        if let Err(e) = run_ipc_server(socket_path, pool_clone, ipc_shutdown_trigger, ipc_server_shutdown_rx).await {
+        if let Err(e) = run_ipc_server(
+            socket_path,
+            pool_clone,
+            ipc_shutdown_trigger,
+            ipc_server_shutdown_rx,
+        )
+        .await
+        {
             error!(error = %e, "IPC server error");
         }
     });

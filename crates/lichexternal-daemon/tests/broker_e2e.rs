@@ -67,7 +67,11 @@ async fn test_broker_poll_and_chunked_stream_e2e() {
     let client = BrokerClient::new(mock_server.uri());
 
     // Acquire work
-    let job = client.poll_work("secret-xyz").await.unwrap().expect("Expected work item");
+    let job = client
+        .poll_work("secret-xyz")
+        .await
+        .unwrap()
+        .expect("Expected work item");
     assert_eq!(job.id, "work-job-999");
     assert_eq!(job.work.threads, 4);
     assert_eq!(job.work.moves, vec!["e2e4", "c7c5"]);
@@ -76,8 +80,14 @@ async fn test_broker_poll_and_chunked_stream_e2e() {
     let mut stream = client.start_work_stream(&job.id);
     assert!(stream.is_stream_active());
 
-    stream.send_line("info depth 1 score cp 15 pv g1f3").await.unwrap();
-    stream.send_line("info depth 2 score cp 20 pv g1f3 d7d6").await.unwrap();
+    stream
+        .send_line("info depth 1 score cp 15 pv g1f3")
+        .await
+        .unwrap();
+    stream
+        .send_line("info depth 2 score cp 20 pv g1f3 d7d6")
+        .await
+        .unwrap();
     stream.send_line("bestmove g1f3 ponder d7d6").await.unwrap();
 
     let status = stream.finish().await.unwrap();

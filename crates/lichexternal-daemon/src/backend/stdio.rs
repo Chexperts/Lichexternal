@@ -35,15 +35,13 @@ impl StdioBackend {
 
         let mut child = cmd.spawn().map_err(BackendError::Io)?;
 
-        let stdin = child
-            .stdin
-            .take()
-            .ok_or_else(|| BackendError::HandshakeFailed(String::from("Failed to capture child stdin")))?;
+        let stdin = child.stdin.take().ok_or_else(|| {
+            BackendError::HandshakeFailed(String::from("Failed to capture child stdin"))
+        })?;
 
-        let stdout = child
-            .stdout
-            .take()
-            .ok_or_else(|| BackendError::HandshakeFailed(String::from("Failed to capture child stdout")))?;
+        let stdout = child.stdout.take().ok_or_else(|| {
+            BackendError::HandshakeFailed(String::from("Failed to capture child stdout"))
+        })?;
 
         let stdout_reader = BufReader::new(stdout);
 
@@ -71,7 +69,10 @@ impl EngineBackend for StdioBackend {
             .write_all(trimmed.as_bytes())
             .await
             .map_err(BackendError::Io)?;
-        self.stdin.write_all(b"\n").await.map_err(BackendError::Io)?;
+        self.stdin
+            .write_all(b"\n")
+            .await
+            .map_err(BackendError::Io)?;
         self.stdin.flush().await.map_err(BackendError::Io)?;
 
         Ok(())

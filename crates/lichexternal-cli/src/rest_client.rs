@@ -1,7 +1,7 @@
 //! REST client for Lichess External Engine profile management API.
 
-use reqwest::{Client, StatusCode};
 use lichexternal_core::models::{CreateEngineRequest, EngineProfile, UpdateEngineRequest};
+use reqwest::{Client, StatusCode};
 
 /// Client for interacting with `https://lichess.org/api/external-engine`.
 pub struct LichessRestClient {
@@ -41,7 +41,10 @@ impl LichessRestClient {
     }
 
     /// Register a new engine profile (`POST /api/external-engine`).
-    pub async fn create_engine(&self, req: &CreateEngineRequest) -> Result<EngineProfile, anyhow::Error> {
+    pub async fn create_engine(
+        &self,
+        req: &CreateEngineRequest,
+    ) -> Result<EngineProfile, anyhow::Error> {
         let url = format!("{}/api/external-engine", self.base_url);
         let resp = self
             .client
@@ -54,7 +57,9 @@ impl LichessRestClient {
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
-            return Err(anyhow::anyhow!("Failed to register engine ({status}): {body}"));
+            return Err(anyhow::anyhow!(
+                "Failed to register engine ({status}): {body}"
+            ));
         }
 
         let engine: EngineProfile = resp.json().await?;
@@ -74,7 +79,9 @@ impl LichessRestClient {
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
-            return Err(anyhow::anyhow!("Failed to inspect engine {id} ({status}): {body}"));
+            return Err(anyhow::anyhow!(
+                "Failed to inspect engine {id} ({status}): {body}"
+            ));
         }
 
         let engine: EngineProfile = resp.json().await?;
@@ -82,7 +89,11 @@ impl LichessRestClient {
     }
 
     /// Update an engine profile (`PUT /api/external-engine/{id}`).
-    pub async fn update_engine(&self, id: &str, req: &UpdateEngineRequest) -> Result<EngineProfile, anyhow::Error> {
+    pub async fn update_engine(
+        &self,
+        id: &str,
+        req: &UpdateEngineRequest,
+    ) -> Result<EngineProfile, anyhow::Error> {
         let url = format!("{}/api/external-engine/{id}", self.base_url);
         let resp = self
             .client
@@ -95,7 +106,9 @@ impl LichessRestClient {
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
-            return Err(anyhow::anyhow!("Failed to update engine {id} ({status}): {body}"));
+            return Err(anyhow::anyhow!(
+                "Failed to update engine {id} ({status}): {body}"
+            ));
         }
 
         let engine: EngineProfile = resp.json().await?;
@@ -116,7 +129,9 @@ impl LichessRestClient {
             StatusCode::OK | StatusCode::NO_CONTENT => Ok(()),
             status => {
                 let body = resp.text().await.unwrap_or_default();
-                Err(anyhow::anyhow!("Failed to delete engine {id} ({status}): {body}"))
+                Err(anyhow::anyhow!(
+                    "Failed to delete engine {id} ({status}): {body}"
+                ))
             }
         }
     }

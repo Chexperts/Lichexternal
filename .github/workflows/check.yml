@@ -1,0 +1,46 @@
+name: "Checks"
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_call:
+    inputs:
+      working-directory:
+        description: "Path to directory containing flake.nix"
+        type: string
+        default: "."
+      nixpkgs-keys:
+        description: "Nixpkgs inputs to check"
+        type: string
+        required: false
+
+jobs:
+  flake-check:
+    name: "Flake Check"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: Malix-Labs/dotfiles/.github/actions/nix-setup@main
+      - name: &flake-checker-name "Flake Checker"
+        if: inputs.nixpkgs-keys != '' || github.repository == 'Malix-Labs/dotfiles'
+        uses: &flake-checker-action DeterminateSystems/flake-checker-action@v14
+        with:
+          flake-lock-path: &flake-lock-path "${{ inputs.working-directory || '.' }}/flake.lock"
+          fail-mode: &fail-mode true
+          nixpkgs-keys: ${{ inputs.nixpkgs-keys || 'nixpkgs-stable,nixpkgs-unstable' }}
+      - name: *flake-checker-name
+        if: inputs.nixpkgs-keys == '' && github.repository != 'Malix-Labs/dotfiles'
+        uses: *flake-checker-action
+        with:
+          flake-lock-path: *flake-lock-path
+          fail-mode: *fail-mode
+      - name: "Flake Check"
+        env:
+          WORKING_DIR: ${{ inputs.working-directory }}
+        run: nix flake check --accept-flake-config "$WORKING_DIR"
+      - name: "Dry-run Build"
+        uses: Malix-Labs/dotfiles/.github/actions/nix-build@main
+        with:
+          dry_run: true

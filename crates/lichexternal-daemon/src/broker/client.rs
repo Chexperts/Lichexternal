@@ -1,7 +1,7 @@
 //! Lichess Broker client for work acquisition and streaming responses.
 
-use std::time::Duration;
 use reqwest::{Client, StatusCode};
+use std::time::Duration;
 use tracing::{debug, error, info, warn};
 
 use lichexternal_core::models::{AcquireRequest, AcquireResponse};
@@ -61,18 +61,16 @@ impl BrokerClient {
     /// - `Ok(Some(AcquireResponse))` if work was assigned.
     /// - `Ok(None)` if the broker long-poll timed out with 204 No Content (ready to re-poll).
     /// - `Err(BrokerError)` on network or authentication failure.
-    pub async fn poll_work(&self, provider_secret: &str) -> Result<Option<AcquireResponse>, BrokerError> {
+    pub async fn poll_work(
+        &self,
+        provider_secret: &str,
+    ) -> Result<Option<AcquireResponse>, BrokerError> {
         let url = format!("{}/api/external-engine/work", self.broker_base_url);
         let req_body = AcquireRequest::new(provider_secret.to_string());
 
         debug!(url = %url, "Long-polling broker for work");
 
-        let response = self
-            .client
-            .post(&url)
-            .json(&req_body)
-            .send()
-            .await?;
+        let response = self.client.post(&url).json(&req_body).send().await?;
 
         match response.status() {
             StatusCode::NO_CONTENT => {
@@ -100,7 +98,10 @@ impl BrokerClient {
     ///
     /// Endpoint: `POST /api/external-engine/work/{work_id}`
     pub fn start_work_stream(&self, work_id: &str) -> WorkStreamTransmitter {
-        let url = format!("{}/api/external-engine/work/{}", self.broker_base_url, work_id);
+        let url = format!(
+            "{}/api/external-engine/work/{}",
+            self.broker_base_url, work_id
+        );
         let (read_half, write_half) = tokio::io::duplex(65536);
         let body = reqwest::Body::wrap_stream(tokio_util::io::ReaderStream::new(read_half));
         let client = self.client.clone();
