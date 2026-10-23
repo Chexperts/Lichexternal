@@ -16,8 +16,8 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    rust-overlay = {
-      url = "github:oxalica/rust-overlay";
+    fenix = {
+      url = "github:nix-community/fenix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -47,19 +47,13 @@
           ...
         }:
         let
-          rustToolchain = pkgs.rust-bin.stable.latest.default.override {
-            targets = [
-              "wasm32-unknown-unknown"
-              "x86_64-pc-windows-gnu"
-              "x86_64-unknown-linux-gnu"
-            ];
-            extensions = [
-              "rust-src"
-              "rust-analyzer"
-              "clippy"
-              "rustfmt"
-            ];
-          };
+          fenixPkg = inputs.fenix.packages.${system};
+
+          rustToolchain = fenixPkg.combine [
+            fenixPkg.stable.toolchain
+            fenixPkg.targets.wasm32-unknown-unknown.stable.rust-std
+            fenixPkg.targets.x86_64-pc-windows-gnu.stable.rust-std
+          ];
 
           craneLib = (inputs.crane.mkLib pkgs).overrideToolchain rustToolchain;
 
@@ -114,11 +108,6 @@
           );
         in
         {
-          _module.args.pkgs = import inputs.nixpkgs {
-            inherit system;
-            overlays = [ (import inputs.rust-overlay) ];
-          };
-
           pre-commit.settings.hooks = {
             nixfmt.enable = true;
             deadnix.enable = true;
