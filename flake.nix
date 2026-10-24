@@ -162,7 +162,7 @@
               fi
             '';
 
-          apps = lib.genAttrs ([ "lichexternald" ] ++ (builtins.attrNames aliases)) (name: {
+          apps = lib.genAttrs ([ "lichexternald" ] ++ (lib.attrNames aliases)) (name: {
             type = "app";
             program = lib.getExe' lichexternal name;
           });
