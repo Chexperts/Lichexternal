@@ -10,6 +10,7 @@ mod rest_client;
 use clap::{Parser, Subcommand};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use tabled::settings::Style;
 use tabled::{Table, Tabled};
 
 use lichexternal_core::config::Config;
@@ -42,6 +43,9 @@ enum Commands {
         /// Path to daemon IPC socket
         #[arg(short, long)]
         socket: Option<PathBuf>,
+        /// Output status as JSON (machine-readable)
+        #[arg(long)]
+        json: bool,
     },
     /// Ping running daemon to test connectivity
     Ping {
@@ -101,6 +105,9 @@ enum EngineSubcommand {
         /// Base URL for Lichess REST API
         #[arg(long, default_value = "https://lichess.org")]
         base_url: String,
+        /// Output results as JSON (machine-readable)
+        #[arg(long)]
+        json: bool,
     },
     /// Register a new external engine profile
     Register {
@@ -134,7 +141,6 @@ enum EngineSubcommand {
         #[arg(long, default_value = "https://lichess.org")]
         base_url: String,
     },
-    /// Delete an engine registration from Lichess
     /// Delete an engine registration from Lichess
     Delete {
         /// Engine profile ID
@@ -170,6 +176,8 @@ enum EngineSubcommand {
 
 #[derive(Tabled)]
 struct EngineStatusRow {
+    #[tabled(rename = "#")]
+    index: usize,
     #[tabled(rename = "ID")]
     id: String,
     #[tabled(rename = "Name")]
@@ -186,6 +194,8 @@ struct EngineStatusRow {
 
 #[derive(Tabled)]
 struct LichessEngineRow {
+    #[tabled(rename = "#")]
+    index: usize,
     #[tabled(rename = "ID")]
     id: String,
     #[tabled(rename = "Name")]
@@ -304,33 +314,40 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
         },
-        Commands::Status { socket } => {
+        Commands::Status { socket, json } => {
             let socket_path = socket.unwrap_or_else(Config::default_socket_path);
             let resp = ipc_client::call_daemon_ipc(&socket_path, &IpcRequest::Status).await?;
 
             match resp {
                 IpcResponse::Status { version, engines } => {
-                    println!("Lichexternal Daemon v{version}");
-                    if engines.is_empty() {
-                        println!("No engines configured or running.");
+                    if json {
+                        println!("{}", serde_json::to_string_pretty(&engines)?);
                     } else {
-                        let rows: Vec<EngineStatusRow> = engines
-                            .into_iter()
-                            .map(|e| EngineStatusRow {
-                                id: e.id,
-                                name: e.name,
-                                backend: format!("{:?}", e.backend_type).to_lowercase(),
-                                state: e.state,
-                                active_work: e.active_work_id.unwrap_or_else(|| "-".into()),
-                                depth: e
-                                    .current_depth
-                                    .map(|d| d.to_string())
-                                    .unwrap_or_else(|| "-".into()),
-                            })
-                            .collect();
+                        println!("Lichexternal Daemon v{version}");
+                        if engines.is_empty() {
+                            println!("No engines configured or running.");
+                        } else {
+                            let rows: Vec<EngineStatusRow> = engines
+                                .into_iter()
+                                .enumerate()
+                                .map(|(idx, e)| EngineStatusRow {
+                                    index: idx,
+                                    id: e.id,
+                                    name: e.name,
+                                    backend: format!("{:?}", e.backend_type).to_lowercase(),
+                                    state: e.state,
+                                    active_work: e.active_work_id.unwrap_or_else(|| "-".into()),
+                                    depth: e
+                                        .current_depth
+                                        .map(|d| d.to_string())
+                                        .unwrap_or_else(|| "-".into()),
+                                })
+                                .collect();
 
-                        let table = Table::new(rows).to_string();
-                        println!("\n{table}");
+                            let mut table = Table::new(rows);
+                            table.with(Style::rounded());
+                            println!("\n{table}");
+                        }
                     }
                 }
                 other => {
@@ -420,17 +437,25 @@ async fn main() -> anyhow::Result<()> {
             let _ = backend.send_command("quit").await;
         }
         Commands::Engine { subcmd } => match subcmd {
-            EngineSubcommand::List { token, base_url } => {
+            EngineSubcommand::List {
+                token,
+                base_url,
+                json,
+            } => {
                 let token = resolve_token(token)?;
                 let client = LichessRestClient::new(base_url, token);
                 let engines = client.list_engines().await?;
 
-                if engines.is_empty() {
+                if json {
+                    println!("{}", serde_json::to_string_pretty(&engines)?);
+                } else if engines.is_empty() {
                     println!("No external engines registered on this account.");
                 } else {
                     let rows: Vec<LichessEngineRow> = engines
                         .into_iter()
-                        .map(|e| LichessEngineRow {
+                        .enumerate()
+                        .map(|(idx, e)| LichessEngineRow {
+                            index: idx,
                             id: e.id,
                             name: e.name,
                             max_threads: e.max_threads,
@@ -445,7 +470,8 @@ async fn main() -> anyhow::Result<()> {
                         })
                         .collect();
 
-                    let table = Table::new(rows).to_string();
+                    let mut table = Table::new(rows);
+                    table.with(Style::rounded());
                     println!("\n{table}");
                 }
             }
