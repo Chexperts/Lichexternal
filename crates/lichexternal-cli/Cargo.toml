@@ -22,5 +22,9 @@ anstyle = { workspace = true }
 anstream = { workspace = true }
 tabled = { workspace = true }
 interprocess = { workspace = true, features = ["tokio"] }
-tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-util"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-util", "net"] }
 anyhow = { workspace = true }
+etcetera = { workspace = true }
+toml = { workspace = true }
+ring = "0.17"
+base64 = "0.22"

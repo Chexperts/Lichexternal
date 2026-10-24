@@ -2,7 +2,9 @@
 //!
 //! Command-line management, diagnostic, and profile registration tool.
 
+mod credentials;
 mod ipc_client;
+mod oauth;
 mod rest_client;
 
 use clap::{Parser, Subcommand};
@@ -30,6 +32,11 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Authenticate with Lichess via OAuth 2.0 PKCE or manage saved credentials
+    Auth {
+        #[command(subcommand)]
+        subcmd: AuthSubcommand,
+    },
     /// Inspect real-time operational status of engines in the running daemon
     Status {
         /// Path to daemon IPC socket
@@ -61,6 +68,27 @@ enum Commands {
         #[command(subcommand)]
         subcmd: EngineSubcommand,
     },
+}
+
+#[derive(Subcommand)]
+enum AuthSubcommand {
+    /// Log in interactively with Lichess using OAuth 2.0 PKCE
+    Login {
+        /// Custom OAuth client ID (defaults to 'chexperts-lichexternal')
+        #[arg(long, default_value = oauth::DEFAULT_CLIENT_ID)]
+        client_id: String,
+        /// Base URL for Lichess
+        #[arg(long, default_value = "https://lichess.org")]
+        base_url: String,
+    },
+    /// Check current authentication status and user account
+    Status {
+        /// Base URL for Lichess
+        #[arg(long, default_value = "https://lichess.org")]
+        base_url: String,
+    },
+    /// Log out and delete locally saved credentials
+    Logout,
 }
 
 #[derive(Subcommand)]
@@ -183,6 +211,12 @@ fn resolve_token(token_arg: Option<String>) -> Result<String, anyhow::Error> {
         }
     }
 
+    if let Ok(Some(creds)) = credentials::load_credentials() {
+        if !creds.access_token.trim().is_empty() {
+            return Ok(creds.access_token);
+        }
+    }
+
     if let Some(cfg_path) = Config::default_config_path() {
         if cfg_path.exists() {
             if let Ok(config) = Config::load_from_path(&cfg_path) {
@@ -194,7 +228,9 @@ fn resolve_token(token_arg: Option<String>) -> Result<String, anyhow::Error> {
     }
 
     Err(anyhow::anyhow!(
-        "Lichess API token required. Provide via --token <TOKEN> or set LICHESS_API_TOKEN environment variable."
+        "Lichess authentication required.\n\
+         Please run `lichexternal auth login` to authenticate interactively via OAuth,\n\
+         or provide a token via --token <TOKEN> / LICHESS_API_TOKEN environment variable."
     ))
 }
 
@@ -203,6 +239,71 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
+        Commands::Auth { subcmd } => match subcmd {
+            AuthSubcommand::Login {
+                client_id,
+                base_url,
+            } => {
+                let (token_resp, username) = oauth::login_pkce(&base_url, &client_id).await?;
+                let creds = credentials::Credentials {
+                    access_token: token_resp.access_token,
+                    username: username.clone(),
+                    scope: token_resp.scope,
+                };
+                let saved_path = credentials::save_credentials(&creds)?;
+
+                println!("\n✓ Successfully authenticated with Lichess!");
+                if let Some(user) = username {
+                    println!("  Logged in as: @{user}");
+                }
+                println!("  Credentials stored at: {}", saved_path.display());
+            }
+            AuthSubcommand::Status { base_url } => {
+                if let Ok(Some(creds)) = credentials::load_credentials() {
+                    println!("Stored Credentials Found:");
+                    if let Some(user) = &creds.username {
+                        println!("  User:   @{user}");
+                    }
+                    if let Some(scope) = &creds.scope {
+                        println!("  Scopes: {scope}");
+                    }
+                    if let Some(path) = credentials::credentials_path() {
+                        println!("  File:   {}", path.display());
+                    }
+
+                    print!("  Token verification: ");
+                    match oauth::fetch_account_username(&base_url, &creds.access_token).await {
+                        Ok(username) => {
+                            println!("✓ Valid (active as @{username})");
+                        }
+                        Err(e) => {
+                            println!("✗ Invalid or expired ({e})");
+                        }
+                    }
+                } else if let Ok(t) = std::env::var("LICHESS_API_TOKEN") {
+                    println!("Authentication: via LICHESS_API_TOKEN environment variable");
+                    print!("  Token verification: ");
+                    match oauth::fetch_account_username(&base_url, &t).await {
+                        Ok(username) => {
+                            println!("✓ Valid (active as @{username})");
+                        }
+                        Err(e) => {
+                            println!("✗ Invalid or expired ({e})");
+                        }
+                    }
+                } else {
+                    println!("Not currently authenticated.");
+                    println!("Run `lichexternal auth login` to sign in with your Lichess account.");
+                }
+            }
+            AuthSubcommand::Logout => {
+                if credentials::delete_credentials()? {
+                    println!("✓ Successfully logged out. Credentials removed.");
+                } else {
+                    println!("No stored credentials found to remove.");
+                }
+            }
+        },
         Commands::Status { socket } => {
             let socket_path = socket.unwrap_or_else(Config::default_socket_path);
             let resp = ipc_client::call_daemon_ipc(&socket_path, &IpcRequest::Status).await?;

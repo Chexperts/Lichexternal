@@ -739,15 +739,19 @@ dependencies = [
  "anstream",
  "anstyle",
  "anyhow",
+ "base64 0.22.1",
  "clap",
+ "etcetera",
  "interprocess",
  "lichexternal-core",
  "lichexternal-daemon",
  "reqwest",
+ "ring",
  "serde",
  "serde_json",
  "tabled",
  "tokio",
+ "toml",
 ]
 
 [[package]]

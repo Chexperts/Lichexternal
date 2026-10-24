@@ -112,12 +112,30 @@ Ensure your engine executable adheres to standard UCI:
 lichexternal test-engine /usr/bin/stockfish
 ```
 
-### 3. Register an Engine on Lichess
+### 3. Authenticate with Lichess
 
-You can register an engine profile directly from the CLI using your personal API token (with `engine:read`, `engine:write` scopes):
+#### Option A: Interactive OAuth 2.0 PKCE Login (Recommended)
+Log in with your Lichess account directly from the command line without creating or copying tokens:
+```bash
+lichexternal auth login
+```
+This automatically launches your default browser to authorize `chexperts-lichexternal` (`engine:read engine:write`), captures the authorization code on a local loopback server, and securely saves the credentials to `$XDG_CONFIG_HOME/lichexternal/credentials.toml` (with Unix `0600` permissions).
+
+Verify your login status at any time:
+```bash
+lichexternal auth status
+```
+
+#### Option B: Personal Access Token (Headless / CI / NixOS)
+Alternatively, export a personal access token generated at [lichess.org/account/oauth/token](https://lichess.org/account/oauth/token):
 ```bash
 export LICHESS_API_TOKEN="lip_your_personal_token"
+```
 
+### 4. Register an Engine on Lichess
+
+Once authenticated, register an engine profile directly from the CLI:
+```bash
 lichexternal engine register \
   --name "Stockfish 19 (Local)" \
   --max-threads 16 \
@@ -126,7 +144,7 @@ lichexternal engine register \
 ```
 This prints your newly assigned `id` and `provider_secret`. Paste the `provider_secret` into your `config.toml`.
 
-### 4. Run the Daemon
+### 5. Run the Daemon
 
 ```bash
 lichexternald --config config.toml
