@@ -46,7 +46,7 @@ in
         After = [ "network-online.target" ];
       };
       Service = {
-        ExecStart = "${cfg.package}/bin/lichexternald";
+        ExecStart = "${cfg.package}/bin/lichextd";
         Restart = "on-failure";
         RestartSec = 5;
       };
@@ -58,7 +58,7 @@ in
     launchd.user.agents.lichexternald = mkIf pkgs.stdenv.hostPlatform.isDarwin {
       enable = true;
       config = {
-        ProgramArguments = [ "${cfg.package}/bin/lichexternald" ];
+        ProgramArguments = [ "${cfg.package}/bin/lichextd" ];
         KeepAlive = true;
         RunAtLoad = true;
         StandardOutPath = "${config.home.homeDirectory}/Library/Logs/lichexternald.log";

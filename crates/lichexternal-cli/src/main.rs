@@ -22,7 +22,7 @@ use rest_client::LichessRestClient;
 
 #[derive(Parser)]
 #[command(
-    name = "lichexternal",
+    name = "lichext",
     version = lichexternal_core::VERSION,
     about = "Management CLI for Lichess external engine bridges and daemon diagnostics"
 )]

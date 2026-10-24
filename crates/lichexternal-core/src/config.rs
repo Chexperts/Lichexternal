@@ -230,17 +230,17 @@ impl Config {
     pub fn default_socket_path() -> std::path::PathBuf {
         #[cfg(windows)]
         {
-            std::path::PathBuf::from(r"\\.\pipe\lichexternald")
+            std::path::PathBuf::from(r"\\.\pipe\lichextd")
         }
         #[cfg(not(windows))]
         {
             use etcetera::base_strategy::{choose_base_strategy, BaseStrategy};
             if let Ok(strategy) = choose_base_strategy() {
                 if let Some(runtime_dir) = strategy.runtime_dir() {
-                    return runtime_dir.join("lichexternal").join("lichexternald.sock");
+                    return runtime_dir.join("lichexternal").join("lichextd.sock");
                 }
             }
-            std::path::PathBuf::from("/tmp/lichexternald.sock")
+            std::path::PathBuf::from("/tmp/lichextd.sock")
         }
     }
 }

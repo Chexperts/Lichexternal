@@ -70,20 +70,12 @@
 
           cargoArtifacts = craneLib.buildDepsOnly commonArgs;
 
-          aliases = {
-            lichext = "lichexternal";
-            lichextd = "lichexternald";
-          };
-
           lichexternal = craneLib.buildPackage (
             commonArgs
             // {
               inherit cargoArtifacts;
               pname = "lichexternal";
               version = "0.1.0";
-              postInstall = lib.concatLines (
-                lib.mapAttrsToList (alias: target: "ln -s ${target} $out/bin/${alias}") aliases
-              );
             }
           );
 
@@ -162,10 +154,20 @@
               fi
             '';
 
-          apps = lib.genAttrs ([ "lichexternald" ] ++ (lib.attrNames aliases)) (name: {
-            type = "app";
-            program = lib.getExe' lichexternal name;
-          });
+          apps = {
+            default = {
+              type = "app";
+              program = lib.getExe' lichexternal "lichext";
+            };
+            lichext = {
+              type = "app";
+              program = lib.getExe' lichexternal "lichext";
+            };
+            lichextd = {
+              type = "app";
+              program = lib.getExe' lichexternal "lichextd";
+            };
+          };
 
           packages = {
             inherit lichexternal;

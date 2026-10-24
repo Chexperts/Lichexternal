@@ -40,7 +40,7 @@ pub async fn call_daemon_ipc(
         Ok(s) => s,
         Err(e) => {
             return Err(anyhow::anyhow!(
-                "Failed to connect to daemon at '{}': {e}\nIs lichexternald running?",
+                "Failed to connect to daemon at '{}': {e}\nIs lichextd running?",
                 socket_path.display()
             ));
         }

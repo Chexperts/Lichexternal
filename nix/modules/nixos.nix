@@ -49,11 +49,11 @@ in
       serviceConfig = {
         ExecStart =
           if cfg.configFile != null then
-            "${cfg.package}/bin/lichexternald --config ${cfg.configFile}"
+            "${cfg.package}/bin/lichextd --config ${cfg.configFile}"
           else if cfg.settings != null then
-            "${cfg.package}/bin/lichexternald --config ${tomlFormat.generate "config.toml" cfg.settings}"
+            "${cfg.package}/bin/lichextd --config ${tomlFormat.generate "config.toml" cfg.settings}"
           else
-            "${cfg.package}/bin/lichexternald";
+            "${cfg.package}/bin/lichextd";
         Restart = "on-failure";
         RestartSec = 5;
         DynamicUser = true;

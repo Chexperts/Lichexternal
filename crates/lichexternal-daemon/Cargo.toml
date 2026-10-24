@@ -8,7 +8,7 @@ license.workspace = true
 repository.workspace = true
 
 [[bin]]
-name = "lichexternald"
+name = "lichextd"
 path = "src/main.rs"
 
 [dependencies]

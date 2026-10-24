@@ -22,11 +22,11 @@ async fn main() -> anyhow::Result<()> {
                 config_path = args.next().map(PathBuf::from);
             }
             "-v" | "--version" => {
-                println!("lichexternald v{}", lichexternal_core::VERSION);
+                println!("lichextd v{}", lichexternal_core::VERSION);
                 return Ok(());
             }
             "-h" | "--help" => {
-                println!("Usage: lichexternald [OPTIONS]");
+                println!("Usage: lichextd [OPTIONS]");
                 println!();
                 println!("Options:");
                 println!("  -c, --config <PATH>  Path to configuration file");
