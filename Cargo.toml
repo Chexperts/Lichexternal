@@ -35,7 +35,7 @@ futures-util = { version = "0.3", default-features = false }
 
 # Cross-platform IPC, paths & CLI
 interprocess = { version = "2.2", default-features = false }
-etcetera = "0.8"
+etcetera = "0.11"
 clap = { version = "4.5", default-features = false, features = ["derive", "std", "help", "usage", "error-context"] }
 anstyle = "1.0"
 anstream = "0.6"
