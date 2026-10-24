@@ -189,11 +189,12 @@ Lichexternal Daemon v0.1.0
 
 ### Running via Nix Flake
 ```bash
-# Run daemon
-nix run .#lichexternald -- --config config.toml
+# Run daemon (or shorthand alias: lichextd)
+nix run .#default -- --config config.toml
 
-# Run CLI
-nix run .#lichexternal -- status
+# Or run directly from your environment:
+lichexternal status
+lichext status
 ```
 
 ### NixOS Service Module

@@ -76,6 +76,10 @@
               inherit cargoArtifacts;
               pname = "lichexternal";
               version = "0.1.0";
+              postInstall = ''
+                ln -s lichexternal $out/bin/lichext
+                ln -s lichexternald $out/bin/lichextd
+              '';
             }
           );
 
@@ -153,6 +157,29 @@
                 exit "$exitcode"
               fi
             '';
+
+          apps = {
+            default = {
+              type = "app";
+              program = "${lichexternal}/bin/lichexternal";
+            };
+            lichexternal = {
+              type = "app";
+              program = "${lichexternal}/bin/lichexternal";
+            };
+            lichext = {
+              type = "app";
+              program = "${lichexternal}/bin/lichext";
+            };
+            lichexternald = {
+              type = "app";
+              program = "${lichexternal}/bin/lichexternald";
+            };
+            lichextd = {
+              type = "app";
+              program = "${lichexternal}/bin/lichextd";
+            };
+          };
 
           packages = {
             inherit lichexternal;

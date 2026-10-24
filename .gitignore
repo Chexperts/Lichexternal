@@ -14,3 +14,4 @@ result-*
 *.swo
 .DS_Store
 Thumbs.db
+.pre-commit-config.yaml
