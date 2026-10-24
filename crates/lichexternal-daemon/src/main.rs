@@ -41,10 +41,33 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    let config_file = match config_path {
-        Some(path) => path,
+    let (config_file, was_auto_created) = match config_path {
+        Some(path) => {
+            if !path.exists() {
+                eprintln!("Configuration file not found at: {}", path.display());
+                std::process::exit(1);
+            }
+            (path, false)
+        }
         None => match Config::default_config_path() {
-            Some(path) => path,
+            Some(path) => {
+                if !path.exists() {
+                    if let Some(parent) = path.parent() {
+                        let _ = std::fs::create_dir_all(parent);
+                    }
+                    const TEMPLATE: &str = include_str!("../../../config.example.toml");
+                    if let Err(e) = std::fs::write(&path, TEMPLATE) {
+                        eprintln!(
+                            "Configuration file not found at {} and failed to create default template: {e}",
+                            path.display()
+                        );
+                        std::process::exit(1);
+                    }
+                    (path, true)
+                } else {
+                    (path, false)
+                }
+            }
             None => {
                 eprintln!("Error: Could not determine standard config directory for your OS.");
                 std::process::exit(1);
@@ -52,12 +75,13 @@ async fn main() -> anyhow::Result<()> {
         },
     };
 
-    if !config_file.exists() {
-        eprintln!(
-            "Configuration file not found at: {}\nCreate one based on config.example.toml or specify --config <path>",
+    if was_auto_created {
+        println!(
+            "Initialized default configuration template at: {}\n\
+             Please edit this file to configure your engines and provider secrets before running the daemon.",
             config_file.display()
         );
-        std::process::exit(1);
+        return Ok(());
     }
 
     let config = Config::load_from_path(&config_file)?;

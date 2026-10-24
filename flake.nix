@@ -161,15 +161,13 @@
           apps =
             lib.genAttrs
               [
-                "default"
-                "lichexternal"
                 "lichext"
                 "lichexternald"
                 "lichextd"
               ]
               (name: {
                 type = "app";
-                program = "${lichexternal}/bin/${if name == "default" then "lichexternal" else name}";
+                program = lib.getExe' lichexternal name;
               });
 
           packages = {

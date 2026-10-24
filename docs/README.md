@@ -61,12 +61,6 @@ flowchart TD
 
 ### 1. Configure Engines
 
-Copy the documented template to your standard configuration directory:
-```bash
-mkdir -p ~/.config/lichexternal
-cp config.example.toml ~/.config/lichexternal/config.toml
-```
-
 Edit `~/.config/lichexternal/config.toml` to declare your engines:
 ```toml
 log_level = "info"
