@@ -1,20 +1,20 @@
 # Lichexternal
 
-High-performance, cross-platform asynchronous service bridging the [Lichess External Engine API](https://lichess.org/api/external-engine) with local and remote chess engines.
+Connect any local or remote chess engine directly to your Lichess analysis board.
+
+Lichexternal bridges the [Lichess External Engine API](https://lichess.org/api/external-engine) with your hardware. Run Stockfish, Maia, Leela Chess Zero, or custom engines locally without browser performance limits, keeping your credentials secure and your evaluation responsive.
 
 Part of the **Chexperts** open-source chess ecosystem.
 
-## Highlights
+## Features
 
-- **100% Generic & Unopinionated**: Zero hardcoded engine logic. Seamlessly drives standard executables (**Stockfish**, **Maia 3**, **Lc0**) via subprocess standard I/O (`stdio`) or persistent local daemons (**Chexpectimax**) via local sockets (`socket`).
-- **Zero-Copy SIMD Parser**: Uses `memchr` to parse engine calculation streams (`info depth ... multipv ... score cp/mate ... pv ...`) and `bestmove` tokens without heap allocations.
-- **Instant Stream Cancellation**: Detects when a Lichess user cancels analysis or closes the browser tab, immediately signals `stop\n` to the engine, drains the trailing `bestmove`, and resets to polling without killing or restarting the engine process.
-- **Cross-Platform & WASM-Ready**:
-  - `lichexternal-core` has zero OS/network dependencies, compiling to `wasm32-unknown-unknown`, Windows, Linux, macOS, and Android.
-  - `lichexternal-daemon` runs natively on Windows (Named Pipes `\\.\pipe\lichexternald` and `%LOCALAPPDATA%`), Linux/Android (Unix Domain Sockets and `$XDG_CONFIG_HOME`), and macOS.
-- **Modern Nix Flake**: RFC 140 compliant (`hostSystem`), offering pre-configured NixOS and Home Manager system modules.
+- **Generic Engine Support**: Works with standard UCI executables through subprocess pipes (`stdio`) or persistent socket daemons (`socket`).
+- **Interactive Authentication**: Log in directly from your terminal using OAuth 2.0 PKCE. No manual token creation or file editing required.
+- **Responsive Streaming**: Streams engine calculations in real time. Stops evaluation immediately when you change moves or close the browser tab.
+- **Cross-Platform**: Runs on Linux, macOS, and Windows. The core protocol crate compiles to `wasm32-unknown-unknown` for web contexts.
+- **System Integration**: Packaged with ready-to-use NixOS and Home Manager service modules.
 
-## Architecture Overview
+## Architecture
 
 ```mermaid
 flowchart TD
@@ -24,64 +24,105 @@ flowchart TD
     end
 
     subgraph Host["Host Machine"]
-        subgraph Daemon["Lichexternal Daemon (lichexternald / lichextd)"]
-            subgraph Supervisor["Supervisor Pool"]
-                StdioSession["Stdio Session"]
-                SocketSession["Socket Session"]
-            end
+        subgraph Daemon["Daemon (lichextd)"]
+            Supervisor["Supervisor Pool"]
             IPC["Control IPC Server"]
         end
 
         subgraph Engines["Engines"]
-            Stockfish["Stockfish (subprocess)"]
-            Chexpectimax["Chexpectimax (socket daemon)"]
+            Stockfish["Stockfish (stdio)"]
+            Custom["Custom Engine (socket)"]
         end
 
-        subgraph Client["CLI (lichexternal / lichext)"]
-            CliCmds["status | ping | stop | engine | auth | test-engine"]
+        subgraph Client["CLI (lichext)"]
+            Commands["status | engine | auth | test-engine"]
         end
     end
 
-    Broker <-->|"Long-poll / POST stream"| Supervisor
-    RestApi <-->|"Engine registration"| Client
-    StdioSession <-->|"stdin / stdout"| Stockfish
-    SocketSession <-->|"Unix domain socket / pipe"| Chexpectimax
-    Client <-->|"JSON-RPC (socket / pipe)"| IPC
+    Broker <-->|"Work Long-poll & POST stream"| Supervisor
+    RestApi <-->|"Engine Profile Management"| Client
+    Supervisor <-->|"UCI standard I/O"| Stockfish
+    Supervisor <-->|"Unix domain socket / pipe"| Custom
+    Client <-->|"JSON-RPC IPC"| IPC
 ```
 
-### Crates
+### Components
 
-| Crate | Purpose | Targets |
-| :--- | :--- | :--- |
-| **[`lichexternal-core`](../crates/lichexternal-core)** | Pure protocol wire models, UCI command generators, zero-copy `memchr` parser, configuration models. Optional `ts-rs` type export for `Lichextension`. | `wasm32-unknown-unknown`, `x86_64`, `aarch64` |
-| **[`lichexternal-daemon`](../crates/lichexternal-daemon)** | Unattended daemon (`lichexternald`) running the concurrent engine supervisor pool, stdio/socket backends, broker long-polling, and local control IPC server. | Windows, Linux, macOS, Android |
-| **[`lichexternal-cli`](../crates/lichexternal-cli)** | User-facing management CLI (`lichexternal`) with tabular engine status views, local engine verification, and Lichess profile CRUD. | Windows, Linux, macOS |
+| Component | Path | Description | Supported Targets |
+| :--- | :--- | :--- | :--- |
+| **`lichext`** | `crates/lichexternal-cli` | Command-line management tool for authentication, engine registration, and live inspection. | Linux, macOS, Windows |
+| **`lichextd`** | `crates/lichexternal-daemon` | Background daemon managing engine processes, polling work from Lichess, and streaming evaluations. | Linux, macOS, Windows, Android |
+| **`lichexternal-core`** | `crates/lichexternal-core` | Protocol definitions, UCI command serialization, SIMD stream parsing, and configuration models. | Linux, macOS, Windows, Android, `wasm32-unknown-unknown` |
 
 ## Quick Start
 
-### 1. Configure Engines
+### 1. Authenticate with Lichess
 
-Edit `~/.config/lichexternal/config.toml` to declare your engines:
+Log in using OAuth directly from the terminal:
+
+```bash
+lichext auth login
+```
+
+This opens your browser to authorize `chexperts-lichexternal` (`engine:read engine:write`) and saves the credentials securely to your configuration directory.
+
+To check login status at any time:
+
+```bash
+lichext auth status
+```
+
+For headless servers or automated environments, pass a personal token instead:
+
+```bash
+export LICHESS_API_TOKEN="lip_your_personal_token"
+```
+
+### 2. Register an Engine on Lichess
+
+Register your engine profile with Lichess:
+
+```bash
+lichext engine register \
+  --name "Stockfish 19" \
+  --max-threads 16 \
+  --max-hash 4096 \
+  --variants chess,atomic
+```
+
+This returns an engine `id` and `provider_secret`.
+
+### 3. Configure the Daemon
+
+The daemon loads configuration from standard OS directories:
+- Linux: `~/.config/lichexternal/config.toml`
+- macOS: `~/Library/Application Support/lichexternal/config.toml`
+- Windows: `%LOCALAPPDATA%\lichexternal\config.toml`
+
+If missing, the daemon automatically creates a documented template on its first run. You can also view all configuration options in [config.example.toml](../config.example.toml).
+
+Example configuration:
+
 ```toml
 log_level = "info"
 broker_base_url = "https://engine.lichess.ovh"
 
-# Local Stockfish via process I/O
+# Subprocess engine via standard I/O
 [[engines]]
-id = "stockfish-local"
-provider_secret = "YOUR_PROVIDER_SECRET_FROM_LICHESS"
-name = "Stockfish 19 (Local)"
+id = "YOUR_ENGINE_ID"
+provider_secret = "YOUR_PROVIDER_SECRET"
+name = "Stockfish 19"
 type = "stdio"
 command = "/usr/bin/stockfish"
 max_threads = 16
 max_hash = 4096
-variants = ["chess"]
+variants = ["chess", "atomic"]
 
-# Chexpectimax or Maia via local socket
+# Persistent engine via local socket
 [[engines]]
-id = "chexpectimax-local"
-provider_secret = "YOUR_CHEXPECTIMAX_PROVIDER_SECRET"
-name = "Chexpectimax (Meta-Engine)"
+id = "YOUR_SOCKET_ENGINE_ID"
+provider_secret = "YOUR_SOCKET_PROVIDER_SECRET"
+name = "Chexpectimax"
 type = "socket"
 socket = "/run/user/1000/chexpectimax.sock"
 max_threads = 8
@@ -89,106 +130,69 @@ max_hash = 2048
 variants = ["chess"]
 ```
 
-### 2. Verify an Engine Locally
-
-Ensure your engine executable adheres to standard UCI:
-```bash
-lichexternal test-engine /usr/bin/stockfish
-```
-
-### 3. Authenticate with Lichess
-
-#### Option A: Interactive OAuth 2.0 PKCE Login (Recommended)
-Log in with your Lichess account directly from the command line without creating or copying tokens:
-```bash
-lichexternal auth login
-```
-This automatically launches your default browser to authorize `chexperts-lichexternal` (`engine:read engine:write`), captures the authorization code on a local loopback server, and securely saves the credentials to `$XDG_CONFIG_HOME/lichexternal/credentials.toml` (with Unix `0600` permissions).
-
-Verify your login status at any time:
-```bash
-lichexternal auth status
-```
-
-#### Option B: Personal Access Token (Headless / CI / NixOS)
-Alternatively, export a personal access token generated at [lichess.org/account/oauth/token](https://lichess.org/account/oauth/token):
-```bash
-export LICHESS_API_TOKEN="lip_your_personal_token"
-```
-
-### 4. Register an Engine on Lichess
-
-Once authenticated, register an engine profile directly from the CLI:
-```bash
-lichexternal engine register \
-  --name "Stockfish 19 (Local)" \
-  --max-threads 16 \
-  --max-hash 4096 \
-  --variants chess,atomic
-```
-This prints your newly assigned `id` and `provider_secret`. Paste the `provider_secret` into your `~/.config/lichexternal/config.toml`.
-
-### 5. Run the Daemon
+Before running, test that your engine binary communicates correctly using UCI:
 
 ```bash
-lichexternald
+lichext test-engine /usr/bin/stockfish
 ```
 
-### 6. Inspect Live Status
+### 4. Run the Daemon
 
-From another terminal, inspect live engine calculation states:
+Start the background service:
+
 ```bash
-lichexternal status
+lichextd
 ```
 
-Output (formatted in modern rounded Nushell table style):
+### 5. Check Live Status
+
+Check the status of running engines from another terminal:
+
+```bash
+lichext status
 ```
+
+Output:
+
+```text
 Lichexternal Daemon v0.1.0
 
-╭───┬────────────────────┬────────────────────────────┬─────────┬───────────┬────────────────┬───────╮
-│ # │ ID                 │ Name                       │ Backend │ Status    │ Active Work    │ Depth │
-├───┼────────────────────┼────────────────────────────┼─────────┼───────────┼────────────────┼───────┤
-│ 0 │ stockfish-local    │ Stockfish 19 (Local)       │ stdio   │ analyzing │ work-abc-12345 │ 24    │
-│ 1 │ chexpectimax-local │ Chexpectimax (Meta-Engine) │ socket  │ idle      │ -              │ -     │
-╰───┴────────────────────┴────────────────────────────┴─────────┴───────────┴────────────────┴───────╯
+╭───┬────────────────────┬──────────────┬─────────┬───────────┬────────────────┬───────╮
+│ # │ ID                 │ Name         │ Backend │ Status    │ Active Work    │ Depth │
+├───┼────────────────────┼──────────────┼─────────┼───────────┼────────────────┼───────┤
+│ 0 │ stockfish-local    │ Stockfish 19 │ stdio   │ analyzing │ work-abc-12345 │ 24    │
+│ 1 │ chexpectimax-local │ Chexpectimax │ socket  │ idle      │ -              │ -     │
+╰───┴────────────────────┴──────────────┴─────────┴───────────┴────────────────┴───────╯
 ```
 
-Machine-readable JSON output (ideal for Nushell pipelines, jq, or automated monitoring):
+For scripts and pipeline automation, get machine-readable output:
+
 ```bash
-lichexternal status --json
+lichext status --json
 ```
 
-## Wire Protocol & Security
+## Security Model
 
-1. **Authentication Separation**:
-   - [REST API](https://lichess.org/api/external-engine): Used only for engine profile CRUD. Authenticated via `Authorization: Bearer <personal_token>`.
-   - [Broker Work API](https://engine.lichess.ovh/api/external-engine/work): Used by the background daemon to acquire evaluation jobs. Authenticated via `{"providerSecret": "<secret>"}` in the JSON body.
-   - Security Benefit: Daemons running on headless servers or untrusted nodes only need the individual engine's `providerSecret`, keeping your personal account credentials completely private.
+Lichexternal separates account credentials from work execution:
 
-2. **Chunked HTTP Line Streaming**:
-   - Work analysis is streamed to `POST /api/external-engine/work/{id}` with `Content-Type: text/plain`.
-   - Real-time `info ...` lines stream chunk-by-chunk as calculated.
-   - Closing with `bestmove ...` finishes the HTTP request.
+1. **Profile Management**: Handled via the Lichess [REST API](https://lichess.org/api/external-engine) using your OAuth token or personal access token.
+2. **Work Execution**: Handled via the [Broker Work API](https://engine.lichess.ovh/api/external-engine/work) using only the engine's `provider_secret`.
+3. **Isolation**: You can run `lichextd` on untrusted machines or remote servers with only the individual engine's `provider_secret`. Your Lichess account credentials never need to leave your primary machine.
 
-## Nix & NixOS Integration
+## Nix Integration
 
-### Running via Nix Flake
+### Running via Flake
 
-Run daemon (or shorthand alias `lichextd`):
 ```bash
-nix run .#lichexternald
+# Run CLI
+nix run .#lichext -- status
+
+# Run daemon
 nix run .#lichextd
 ```
 
-Run CLI (or shorthand alias `lichext`):
-```bash
-nix run .#lichexternal -- status
-nix run .#lichext -- status
-```
+### NixOS Module
 
-### NixOS Service Module
-
-Add `Lichexternal` to your `configuration.nix`:
 ```nix
 {
   services.lichexternald = {
@@ -199,7 +203,7 @@ Add `Lichexternal` to your `configuration.nix`:
         {
           id = "stockfish-local";
           provider_secret = "secret-xyz";
-          name = "Stockfish (NixOS)";
+          name = "Stockfish";
           type = "stdio";
           command = lib.getExe pkgs.stockfish;
           max_threads = 8;
@@ -224,5 +228,6 @@ Add `Lichexternal` to your `configuration.nix`:
   };
 }
 ```
+
 
 
