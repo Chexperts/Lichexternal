@@ -158,28 +158,19 @@
               fi
             '';
 
-          apps = {
-            default = {
-              type = "app";
-              program = "${lichexternal}/bin/lichexternal";
-            };
-            lichexternal = {
-              type = "app";
-              program = "${lichexternal}/bin/lichexternal";
-            };
-            lichext = {
-              type = "app";
-              program = "${lichexternal}/bin/lichext";
-            };
-            lichexternald = {
-              type = "app";
-              program = "${lichexternal}/bin/lichexternald";
-            };
-            lichextd = {
-              type = "app";
-              program = "${lichexternal}/bin/lichextd";
-            };
-          };
+          apps =
+            lib.genAttrs
+              [
+                "default"
+                "lichexternal"
+                "lichext"
+                "lichexternald"
+                "lichextd"
+              ]
+              (name: {
+                type = "app";
+                program = "${lichexternal}/bin/${if name == "default" then "lichexternal" else name}";
+              });
 
           packages = {
             inherit lichexternal;

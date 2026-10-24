@@ -1,6 +1,6 @@
 # Lichexternal
 
-High-performance, cross-platform asynchronous service bridging the Lichess External Engine API (<https://lichess.org/api/external-engine>) with local and remote chess engines.
+High-performance, cross-platform asynchronous service bridging the [Lichess External Engine API](https://lichess.org/api/external-engine) with local and remote chess engines.
 
 Part of the **Chexperts** open-source chess ecosystem.
 
@@ -61,12 +61,13 @@ flowchart TD
 
 ### 1. Configure Engines
 
-Copy the documented template:
+Copy the documented template to your standard configuration directory:
 ```bash
-cp config.example.toml config.toml
+mkdir -p ~/.config/lichexternal
+cp config.example.toml ~/.config/lichexternal/config.toml
 ```
 
-Edit `config.toml` to declare your engines:
+Edit `~/.config/lichexternal/config.toml` to declare your engines:
 ```toml
 log_level = "info"
 broker_base_url = "https://engine.lichess.ovh"
@@ -131,19 +132,13 @@ lichexternal engine register \
   --max-hash 4096 \
   --variants chess,atomic
 ```
-This prints your newly assigned `id` and `provider_secret`. Paste the `provider_secret` into your `config.toml`.
+This prints your newly assigned `id` and `provider_secret`. Paste the `provider_secret` into your `~/.config/lichexternal/config.toml`.
 
 ### 5. Run the Daemon
 
 ```bash
-# Explicit configuration path:
-lichexternald --config config.toml
-
-# Or using the default OS path (~/.config/lichexternal/config.toml on Linux):
 lichexternald
 ```
-
-The `--config` parameter is optional if `config.toml` is placed in the standard OS configuration directory (`~/.config/lichexternal/config.toml` on Linux, `~/Library/Application Support/lichexternal/config.toml` on macOS, or `%APPDATA%\lichexternal\config.toml` on Windows).
 
 ### 6. Inspect Live Status
 
@@ -172,8 +167,8 @@ lichexternal status --json
 ## Wire Protocol & Security
 
 1. **Authentication Separation**:
-   - REST API: <https://lichess.org/api/external-engine> - Used only for engine profile CRUD. Authenticated via `Authorization: Bearer <personal_token>`.
-   - Broker Work API: <https://engine.lichess.ovh/api/external-engine/work> - Used by the background daemon to acquire evaluation jobs. Authenticated via `{"providerSecret": "<secret>"}` in the JSON body.
+   - [REST API](https://lichess.org/api/external-engine): Used only for engine profile CRUD. Authenticated via `Authorization: Bearer <personal_token>`.
+   - [Broker Work API](https://engine.lichess.ovh/api/external-engine/work): Used by the background daemon to acquire evaluation jobs. Authenticated via `{"providerSecret": "<secret>"}` in the JSON body.
    - Security Benefit: Daemons running on headless servers or untrusted nodes only need the individual engine's `providerSecret`, keeping your personal account credentials completely private.
 
 2. **Chunked HTTP Line Streaming**:
@@ -187,8 +182,8 @@ lichexternal status --json
 
 Run daemon (or shorthand alias `lichextd`):
 ```bash
-nix run .#lichexternald -- --config config.toml
-nix run .#lichextd -- --config config.toml
+nix run .#lichexternald
+nix run .#lichextd
 ```
 
 Run CLI (or shorthand alias `lichext`):
