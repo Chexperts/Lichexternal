@@ -1,130 +1,239 @@
-# [@Malix-Labs](https://github.com/Malix-Labs) General [Repository Template](https://docs.github.com/repositories/creating-and-managing-repositories/creating-a-repository-from-a-template)
+# Lichexternal
 
-After creating a repository from the [@Malix-Labs](https://github.com/Malix-Labs) [repository template](https://docs.github.com/repositories/creating-and-managing-repositories/creating-a-repository-from-a-template), this file is to be cleared.
-It is accessible online at <https://github.com/Malix-Labs/Template#readme>
+High-performance, cross-platform asynchronous service bridging the Lichess External Engine API (<https://lichess.org/api/external-engine>) with local and remote chess engines.
 
-## Usage
+Part of the **Chexperts** open-source chess ecosystem.
 
-1. [ ] [Create a repository from this template](https://docs.github.com/repositories/creating-and-managing-repositories/creating-a-repository-from-a-template#creating-a-repository-from-a-template)
-2. [ ] Search "`github.com/<USERNAME>/<REPOSITORY>`" and replace all "`<USERNAME>`" by the User/Organization name and "`<REPOSITORY>`" by the Repository name
-3. [ ] Copy all [this repository GitHub Settings](https://github.com/Malix-Labs/Template#github-settings)
-4. [ ] Copy all [this repository GitHub Labels](https://github.com/Malix-Labs/Template#github-labels)
+## Highlights
 
-## Features
+- **100% Generic & Unopinionated**: Zero hardcoded engine logic. Seamlessly drives standard executables (**Stockfish**, **Maia 3**, **Lc0**) via subprocess standard I/O (`stdio`) or persistent local daemons (**Chexpectimax**) via local sockets (`socket`).
+- **Zero-Copy SIMD Parser**: Uses `memchr` to parse engine calculation streams (`info depth ... multipv ... score cp/mate ... pv ...`) and `bestmove` tokens without heap allocations.
+- **Instant Stream Cancellation**: Detects when a Lichess user cancels analysis or closes the browser tab, immediately signals `stop\n` to the engine, drains the trailing `bestmove`, and resets to polling without killing or restarting the engine process.
+- **Cross-Platform & WASM-Ready**:
+  - `lichexternal-core` has zero OS/network dependencies, compiling to `wasm32-unknown-unknown`, Windows, Linux, macOS, and Android.
+  - `lichexternal-daemon` runs natively on Windows (Named Pipes `\\.\pipe\lichexternald` and `%LOCALAPPDATA%`), Linux/Android (Unix Domain Sockets and `$XDG_CONFIG_HOME`), and macOS.
+- **Modern Nix Flake**: RFC 140 compliant (`hostSystem`), offering pre-configured NixOS and Home Manager system modules.
 
-### Branching
+## Architecture Overview
 
-Inspired by [Trunk-Based Development](https://trunkbaseddevelopment.com/) / [GitHub Flow](https://docs.github.com/get-started/using-github/github-flow)
+```mermaid
+flowchart TD
+    subgraph WAN["Lichess Infrastructure"]
+        Broker["engine.lichess.ovh (Broker)"]
+        RestApi["lichess.org/api (REST API)"]
+    end
 
-- **Default (`main`/`master`)**: the single source of truth, fully protected
-- **Issues (`issue/*`)**: short-lived branches for individual issues
-- **Archives (`archive/**/*`)**: branches for archival purposes
-- **Releases (`release/*`)**: branches for preparing a release
-	- **Releases' Issues (`release/*/issue/*`)**: issue work scoped under a specific release
-	- **Releases' Archives (`release/*/archive/**/*`)**: archival work scoped under a specific release
+    subgraph Host["Host Machine"]
+        subgraph Daemon["Lichexternal Daemon (lichexternald / lichextd)"]
+            subgraph Supervisor["Supervisor Pool"]
+                StdioSession["Stdio Session"]
+                SocketSession["Socket Session"]
+            end
+            IPC["Control IPC Server"]
+        end
 
-### Tags
+        subgraph Engines["Engines"]
+            Stockfish["Stockfish (subprocess)"]
+            Chexpectimax["Chexpectimax (socket daemon)"]
+        end
 
-Optimized for [Continuous Deployment (CD)](https://wikipedia.org/wiki/Continuous_deployment)
+        subgraph Client["CLI (lichexternal / lichext)"]
+            CliCmds["status | ping | stop | engine | auth | test-engine"]
+        end
+    end
 
-Using [Semantic Versioning (SemVer)](https://semver.org/) _(current: [v2](https://semver.org/spec/v2.0.0.html))_
+    Broker <-->|"Long-poll / POST stream"| Supervisor
+    RestApi <-->|"Engine registration"| Client
+    StdioSession <-->|"stdin / stdout"| Stockfish
+    SocketSession <-->|"Unix domain socket / pipe"| Chexpectimax
+    Client <-->|"JSON-RPC (socket / pipe)"| IPC
+```
 
-Each push to the default branch should be tagged with a SemVer Tag
+### Crates
 
-Non-SemVer Tags are not encouraged (at least not for long-lived purposes) but allowed
+| Crate | Purpose | Targets |
+| :--- | :--- | :--- |
+| **[`lichexternal-core`](../crates/lichexternal-core)** | Pure protocol wire models, UCI command generators, zero-copy `memchr` parser, configuration models. Optional `ts-rs` type export for `Lichextension`. | `wasm32-unknown-unknown`, `x86_64`, `aarch64` |
+| **[`lichexternal-daemon`](../crates/lichexternal-daemon)** | Unattended daemon (`lichexternald`) running the concurrent engine supervisor pool, stdio/socket backends, broker long-polling, and local control IPC server. | Windows, Linux, macOS, Android |
+| **[`lichexternal-cli`](../crates/lichexternal-cli)** | User-facing management CLI (`lichexternal`) with tabular engine status views, local engine verification, and Lichess profile CRUD. | Windows, Linux, macOS |
 
-### GitHub Releases
+## Quick Start
 
-Optimized for [Continuous Deployment (CD)](https://wikipedia.org/wiki/Continuous_deployment)
+### 1. Configure Engines
 
-Each SemVer Tag pushed to the default branch is meant to be released
+Copy the documented template:
+```bash
+cp config.example.toml config.toml
+```
 
-### Deployments
+Edit `config.toml` to declare your engines:
+```toml
+log_level = "info"
+broker_base_url = "https://engine.lichess.ovh"
 
-Optimized for [Continuous Deployment (CD)](https://wikipedia.org/wiki/Continuous_deployment)
+# Local Stockfish via process I/O
+[[engines]]
+id = "stockfish-local"
+provider_secret = "YOUR_PROVIDER_SECRET_FROM_LICHESS"
+name = "Stockfish 19 (Local)"
+type = "stdio"
+command = "/usr/bin/stockfish"
+max_threads = 16
+max_hash = 4096
+variants = ["chess"]
 
-Each GitHub Release is meant to be deployed
+# Chexpectimax or Maia via local socket
+[[engines]]
+id = "chexpectimax-local"
+provider_secret = "YOUR_CHEXPECTIMAX_PROVIDER_SECRET"
+name = "Chexpectimax (Meta-Engine)"
+type = "socket"
+socket = "/run/user/1000/chexpectimax.sock"
+max_threads = 8
+max_hash = 2048
+variants = ["chess"]
+```
 
-Deployments are meant to be executed from a pipeline (preferably GitHub Workflow) triggered by the GitHub Deployments
+### 2. Verify an Engine Locally
 
-### [Rulesets](https://docs.github.com/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets)
+Ensure your engine executable adheres to standard UCI:
+```bash
+lichexternal test-engine /usr/bin/stockfish
+```
 
-[Rulesets Files Directory](/.github/Rulesets) _([download](https://download-directory.github.io/?url=https://github.com/Malix-Labs/Template/tree/main/.github/Rulesets))_
+### 3. Authenticate with Lichess
 
-| Type   | Name                               | Status | Bypass                                                                                                                                                                   | Targets                                                               | Rules                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | File                                                                |
-| ------ | ---------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| Branch | Archives                           | Active | <ul><li>Repository admin _(Role)_ - Always allow</li><li>Maintainer _(Role)_ - Always allow</li><li>Dependabot _(App • github)_ - Always allow</li></ul>                 | <ul><li>+ `archive/**/*`</li><li>+ `release/*/archive/**/*`</li></ul> | <ul><li>Restrict updates</li><li>Restrict deletions</li><li>Block force pushes</li></ul>                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | [File](</.github/Rulesets/Archives.json>)                           |
-| Branch | Issues                             | Active | <ul><li>Repository admin _(Role)_ - Always allow</li><li>Maintainer _(Role)_ - Always allow</li><li>Dependabot _(App • github)_ - Always allow</li></ul>                 | <ul><li>+ `issue/*`</li><li>+ `release/*/issue/*`</li></ul>           | <ul><li>Restrict creations</li><li>Restrict deletions</li><li>Block force pushes</li></ul>                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | [File](</.github/Rulesets/Issues.json>)                             |
-| Branch | Production - Constructive          | Active | <ul><li>Repository admin _(Role)_ - Always allow</li><li>Maintainer _(Role)_ - Allow for pull requests only</li><li>Dependabot _(App • github)_ - Always allow</li></ul> | <ul><li>+ Default</li><li>+ `release/*`</li></ul>                     | <ul><li>Restrict creations</li><li>Require deployments to succeed</li><li>Require signed commits</li><li>Require a pull request before merging<ul><li>Required approvals: 0</li><li>Dismiss stale pull request approvals when new commits are pushed</li><li>Require review from Code Owners</li><li>Require approval of the most recent reviewable push</li><li>Require conversation resolution before merging</li><li>Request pull request review from Copilot</li><li>Allowed merge methods<ul><li>Merge</li><li>Squash</li><li>Rebase</li></ul></li></ul></li><li>Require code scanning results<ul><li>CodeQL - High or higher - Errors</li></ul></li></ul> | [File](</.github/Rulesets/Production - Constructive.json>)          |
-| Branch | Production - Destructive           | Active | <ul><li>Repository admin _(Role)_ - Always allow</li></ul>                                                                                                               | <ul><li>+ Default</li><li>+ `release/*`</li></ul>                     | <ul><li>Restrict deletions</li><li>Block force pushes</li></ul>                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | [File](</.github/Rulesets/Production - Destructive.json>)           |
-| Tag    | Semantic Versioning - Constructive | Active | <ul><li>Repository admin _(Role)_</li><li>Maintainer _(Role)_</li><li>Dependabot _(App • github)_</li></ul>                                                              | <ul><li>+ `v[0-9]*`</li></ul>                                         | <ul><li>Restrict creations</li><li>Restrict updates</li><li>Require deployments to succeed</li><li>Require signatures</li></ul>                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | [File](</.github/Rulesets/Semantic Versioning - Constructive.json>) |
-| Tag    | Semantic Versioning - Destructive  | Active | <ul><li>Repository admin _(Role)_</li></ul>                                                                                                                              | <ul><li>+ `v[0-9]*`</li></ul>                                         | <ul><li>Restrict deletions</li><li>Block force pushes</li></ul>                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | [File](</.github/Rulesets/Semantic Versioning - Destructive.json>)  |
+#### Option A: Interactive OAuth 2.0 PKCE Login (Recommended)
+Log in with your Lichess account directly from the command line without creating or copying tokens:
+```bash
+lichexternal auth login
+```
+This automatically launches your default browser to authorize `chexperts-lichexternal` (`engine:read engine:write`), captures the authorization code on a local loopback server, and securely saves the credentials to `$XDG_CONFIG_HOME/lichexternal/credentials.toml` (with Unix `0600` permissions).
 
-### [GitHub Labels](https://docs.github.com/issues/using-labels-and-milestones-to-track-work/managing-labels)
+Verify your login status at any time:
+```bash
+lichexternal auth status
+```
 
-| Name        | Description | Color   |
-| ----------- | ----------- | ------- |
-| Feature     |             | #00FF00 |
-| Enhancement |             | #00FFFF |
-| Fix         |             | #FF8000 |
-| Update      |             | #FFFF00 |
-| Deprecation |             | #FF0000 |
+#### Option B: Personal Access Token (Headless / CI / NixOS)
+Alternatively, export a personal access token generated at [lichess.org/account/oauth/token](https://lichess.org/account/oauth/token):
+```bash
+export LICHESS_API_TOKEN="lip_your_personal_token"
+```
 
-### [GitHub Milestones](https://docs.github.com/issues/using-labels-and-milestones-to-track-work/creating-and-editing-milestones-for-issues-and-pull-requests)
+### 4. Register an Engine on Lichess
 
-- "v1.0.0"
+Once authenticated, register an engine profile directly from the CLI:
+```bash
+lichexternal engine register \
+  --name "Stockfish 19 (Local)" \
+  --max-threads 16 \
+  --max-hash 4096 \
+  --variants chess,atomic
+```
+This prints your newly assigned `id` and `provider_secret`. Paste the `provider_secret` into your `config.toml`.
 
-### [GitHub Issue and Pull Request Template](https://docs.github.com/communities/using-templates-to-encourage-useful-issues-and-pull-requests/about-issue-and-pull-request-templates)
+### 5. Run the Daemon
 
-### [GitHub Project Template](https://docs.github.com/issues/planning-and-tracking-with-projects/managing-your-project/managing-project-templates-in-your-organization#copying-a-project-as-a-template)
+```bash
+# Explicit configuration path:
+lichexternald --config config.toml
 
-The best starting [GitHub project template](https://docs.github.com/issues/planning-and-tracking-with-projects/managing-your-project/managing-project-templates-in-your-organization#copying-a-project-as-a-template) for any project scale
+# Or using the default OS path (~/.config/lichexternal/config.toml on Linux):
+lichexternald
+```
 
-### [GitHub Discussions Sections & Categories](https://docs.github.com/discussions/managing-discussions-for-your-community/managing-categories-for-discussions)
+The `--config` parameter is optional if `config.toml` is placed in the standard OS configuration directory (`~/.config/lichexternal/config.toml` on Linux, `~/Library/Application Support/lichexternal/config.toml` on macOS, or `%APPDATA%\lichexternal\config.toml` on Windows).
 
-#### Sections
+### 6. Inspect Live Status
 
-| Name        | Emoji | Categories |
-| ----------- | ----- | ---------- |
-| Development | 🧑‍💻     | None       |
-| Usage       | ✔️     | None       |
+From another terminal, inspect live engine calculation states:
+```bash
+lichexternal status
+```
 
-#### Categories
+Output (formatted in modern rounded Nushell table style):
+```
+Lichexternal Daemon v0.1.0
 
-| Name          | Emoji | Description | Format                | Section |
-| ------------- | ----- | ----------- | --------------------- | ------- |
-| Announcements | 📣     |             | Announcement          | None    |
-| General       | 💬     |             | Open-ended discussion | None    |
-| Questions     | ❔     |             | Question / Answer     | None    |
-| Poll          | 🗳️     |             | Poll                  | None    |
+╭───┬────────────────────┬────────────────────────────┬─────────┬───────────┬────────────────┬───────╮
+│ # │ ID                 │ Name                       │ Backend │ Status    │ Active Work    │ Depth │
+├───┼────────────────────┼────────────────────────────┼─────────┼───────────┼────────────────┼───────┤
+│ 0 │ stockfish-local    │ Stockfish 19 (Local)       │ stdio   │ analyzing │ work-abc-12345 │ 24    │
+│ 1 │ chexpectimax-local │ Chexpectimax (Meta-Engine) │ socket  │ idle      │ -              │ -     │
+╰───┴────────────────────┴────────────────────────────┴─────────┴───────────┴────────────────┴───────╯
+```
 
-### [GitHub Discussion Category Form](https://docs.github.com/discussions/managing-discussions-for-your-community/creating-discussion-category-forms)
+Machine-readable JSON output (ideal for Nushell pipelines, jq, or automated monitoring):
+```bash
+lichexternal status --json
+```
 
-### GitHub Actions
+## Wire Protocol & Security
 
-Optimized for [Trunk-Based Development](https://trunkbaseddevelopment.com/) / [GitHub Flow](https://docs.github.com/get-started/using-github/github-flow)
+1. **Authentication Separation**:
+   - REST API: <https://lichess.org/api/external-engine> - Used only for engine profile CRUD. Authenticated via `Authorization: Bearer <personal_token>`.
+   - Broker Work API: <https://engine.lichess.ovh/api/external-engine/work> - Used by the background daemon to acquire evaluation jobs. Authenticated via `{"providerSecret": "<secret>"}` in the JSON body.
+   - Security Benefit: Daemons running on headless servers or untrusted nodes only need the individual engine's `providerSecret`, keeping your personal account credentials completely private.
 
-- On issue create:
-	- [ ] [Create a branch named as the issue ID and link it to the created issue](https://docs.github.com/issues/tracking-your-work-with-issues/creating-a-branch-for-an-issue)
-		- On first commit push to this branch:
-			- [ ] Create a [draft pull request](https://docs.github.com/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/changing-the-stage-of-a-pull-request#marking-a-pull-request-as-ready-for-review) to the [parent issue](https://docs.github.com/issues/managing-your-tasks-with-tasklists/about-tasklists#about-tasklists-and-issue-hierarchy:~:text=You%20can%20create-,parent,-and%20child%20relationships) if any, else master
-- On push to master:
-	- [ ] Create a [draft release](https://docs.github.com/repositories/releasing-projects-on-github/managing-releases-in-a-repository#:~:text=release%20later%2C%20click-,Save%20draft,-.%20You%20can%20then) with a tag annoted with the latest semver tag incremented by one patch
+2. **Chunked HTTP Line Streaming**:
+   - Work analysis is streamed to `POST /api/external-engine/work/{id}` with `Content-Type: text/plain`.
+   - Real-time `info ...` lines stream chunk-by-chunk as calculated.
+   - Closing with `bestmove ...` finishes the HTTP request.
 
-### GitHub Files
+## Nix & NixOS Integration
 
-Fully featued with GitHub files
+### Running via Nix Flake
 
-### GitHub Settings
+Run daemon (or shorthand alias `lichextd`):
+```bash
+nix run .#lichexternald -- --config config.toml
+nix run .#lichextd -- --config config.toml
+```
 
-GitHub Settings cannot be embeded in a [GitHub repository template](https://docs.github.com/repositories/creating-and-managing-repositories/creating-a-repository-from-a-template) copied data, therefore, you have to [copy them manually](https://github.com/Malix-Labs/Template#github-settings)
+Run CLI (or shorthand alias `lichext`):
+```bash
+nix run .#lichexternal -- status
+nix run .#lichext -- status
+```
 
-#### General
+### NixOS Service Module
 
-##### Pull Requests
+Add `Lichexternal` to your `configuration.nix`:
+```nix
+{
+  services.lichexternald = {
+    enable = true;
+    settings = {
+      log_level = "info";
+      engines = [
+        {
+          id = "stockfish-local";
+          provider_secret = "secret-xyz";
+          name = "Stockfish (NixOS)";
+          type = "stdio";
+          command = lib.getExe pkgs.stockfish;
+          max_threads = 8;
+          max_hash = 2048;
+          variants = [ "chess" ];
+        }
+      ];
+    };
+  };
+}
+```
 
-- Allow merge commits
-  Default commit message: Pull request title
-- Allow squash merging
-  Default commit message: Default message
-- Allow rebase merging
+### Home Manager Module
+
+```nix
+{
+  services.lichexternald = {
+    enable = true;
+    settings = {
+      engines = [ ... ];
+    };
+  };
+}
+```
+
+
