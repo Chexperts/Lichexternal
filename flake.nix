@@ -2,7 +2,7 @@
   description = "Lichexternal: Cross-platform asynchronous service bridging Lichess External Engine API with chess engines";
 
   inputs = {
-    nixpkgs.url = "https://channels.nixos.org/nixos-unstable/nixexprs.tar.xz";
+    nixpkgs.url = "https://channels.nixos.org/nixos-unstable/nixexprs.tar.zst";
 
     systems.url = "github:nix-systems/default";
 
