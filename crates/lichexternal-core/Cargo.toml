@@ -11,13 +11,14 @@ repository.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-memchr = { workspace = true }
+memchr = { workspace = true, optional = true }
 toml = { workspace = true, optional = true }
 etcetera = { workspace = true, optional = true }
 
 [features]
-default = ["std"]
-std = ["serde/std", "memchr/std", "dep:toml", "dep:etcetera"]
+default = ["std", "uci"]
+std = ["serde/std", "dep:toml", "dep:etcetera"]
+uci = ["dep:memchr"]
 typescript = ["dep:ts-rs"]
 
 [dependencies.ts-rs]

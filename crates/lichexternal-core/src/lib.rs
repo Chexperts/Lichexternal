@@ -14,7 +14,9 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub mod models;
 pub use models::*;
 
+#[cfg(feature = "uci")]
 pub mod uci;
+#[cfg(feature = "uci")]
 pub use uci::*;
 
 pub mod config;
