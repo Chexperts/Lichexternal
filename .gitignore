@@ -15,3 +15,6 @@ result-*
 .DS_Store
 Thumbs.db
 .pre-commit-config.yaml
+
+# Generated bindings
+/bindings/

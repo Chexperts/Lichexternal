@@ -154,6 +154,48 @@
               }
             )
           );
+
+          typescriptBindings = craneLib.mkCargoDerivation (
+            commonArgs
+            // {
+              inherit cargoArtifacts;
+              pname = "lichexternal-typescript-bindings";
+              version = "0.1.0";
+              doInstallCargoArtifacts = false;
+              buildPhaseCargoCommand = ''
+                                mkdir -p "$out"
+                                export TS_RS_EXPORT_DIR="$out"
+                                cargo test -p lichexternal-core --features typescript --lib
+
+                                cat << 'EOF' > "$out/index.ts"
+                export * from "./AcquireRequest";
+                export * from "./AcquireResponse";
+                export * from "./CreateEngineRequest";
+                export * from "./EngineMetadata";
+                export * from "./EngineProfile";
+                export * from "./SearchLimit";
+                export * from "./UciVariant";
+                export * from "./UpdateEngineRequest";
+                export * from "./WorkRequest";
+                EOF
+
+                                cat << 'EOF' > "$out/package.json"
+                {
+                  "name": "@chexperts/lichexternal-types",
+                  "version": "0.1.0",
+                  "description": "TypeScript type definitions for Lichess External Engine bridge protocols",
+                  "main": "index.ts",
+                  "types": "index.ts",
+                  "repository": {
+                    "type": "git",
+                    "url": "https://github.com/Chexperts/Lichexternal.git"
+                  },
+                  "license": "AGPL-3.0-or-later"
+                }
+                EOF
+              '';
+            }
+          );
         in
         {
           pre-commit.settings.hooks = {
@@ -220,6 +262,7 @@
           packages = {
             inherit lichexternal;
             default = lichexternal;
+            typescript-bindings = typescriptBindings;
           }
           // (lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux { windows = windowsPackage; });
 
