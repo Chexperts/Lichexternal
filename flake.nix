@@ -114,6 +114,9 @@
 
           src = craneLib.cleanCargoSource ./.;
 
+          crateInfo = craneLib.crateNameFromCargoToml { cargoToml = ./Cargo.toml; };
+          inherit (crateInfo) version;
+
           commonArgs = {
             inherit src;
             strictDeps = true;
@@ -128,9 +131,8 @@
           lichexternal = craneLib.buildPackage (
             commonArgs
             // {
-              inherit cargoArtifacts;
+              inherit cargoArtifacts version;
               pname = "lichexternal";
-              version = "0.1.0";
             }
           );
 
@@ -157,7 +159,7 @@
                 buildInputs = [ mingwPkgs.windows.pthreads ];
                 doCheck = false;
                 pname = "lichexternal-windows";
-                version = "0.1.0";
+                inherit version;
               }
             )
           );
@@ -165,9 +167,8 @@
           typescriptBindings = craneLib.mkCargoDerivation (
             commonArgs
             // {
-              inherit cargoArtifacts;
+              inherit cargoArtifacts version;
               pname = "lichexternal-typescript-bindings";
-              version = "0.1.0";
               doInstallCargoArtifacts = false;
               buildPhaseCargoCommand = ''
                                 mkdir -p "$out"
@@ -186,10 +187,10 @@
                 export * from "./WorkRequest";
                 EOF
 
-                                cat << 'EOF' > "$out/package.json"
+                                cat << EOF > "$out/package.json"
                 {
                   "name": "@chexperts/lichexternal-types",
-                  "version": "0.1.0",
+                  "version": "${version}",
                   "description": "TypeScript type definitions for Lichess External Engine bridge protocols",
                   "main": "index.ts",
                   "types": "index.ts",
