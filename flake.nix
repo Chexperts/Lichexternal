@@ -195,7 +195,7 @@
                   "types": "index.ts",
                   "repository": {
                     "type": "git",
-                    "url": "https://github.com/Chexperts/Lichexternal.git"
+                    "url": "git+https://github.com/Chexperts/Lichexternal.git"
                   },
                   "license": "AGPL-3.0-or-later"
                 }
