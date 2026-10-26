@@ -1,0 +1,27 @@
+{
+  "nodes": {
+    "lichess-api": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1792661493,
+        "narHash": "sha256-Ji5dEN4aPMF+RTWf4N94nFgKP/I0uWV3vsgRF/ZYvIo=",
+        "owner": "lichess-org",
+        "repo": "api",
+        "rev": "fe249ff9afd4fa7647667a81250d4af1766d8ff4",
+        "type": "github"
+      },
+      "original": {
+        "owner": "lichess-org",
+        "repo": "api",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "lichess-api": "lichess-api"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

@@ -28,8 +28,56 @@
     inputs@{ flake-parts, ... }:
     flake-parts.lib.mkFlake { inherit inputs; } {
       imports = [
+        inputs.flake-parts.flakeModules.partitions
         inputs.git-hooks.flakeModule
       ];
+
+      partitionedAttrs.checks = "dev";
+
+      partitions.dev = {
+        extraInputsFlake = ./dev;
+        module =
+          { inputs, ... }:
+          {
+            perSystem =
+              {
+                pkgs,
+                lib,
+                system,
+                ...
+              }:
+              let
+                fenixPkg = inputs.fenix.packages.${system};
+                rustToolchain = fenixPkg.combine [
+                  fenixPkg.stable.toolchain
+                  fenixPkg.targets.wasm32-unknown-unknown.stable.rust-std
+                  fenixPkg.targets.x86_64-pc-windows-gnu.stable.rust-std
+                ];
+                craneLib = (inputs.crane.mkLib pkgs).overrideToolchain rustToolchain;
+                src = craneLib.cleanCargoSource ./.;
+                commonArgs = {
+                  inherit src;
+                  strictDeps = true;
+                  buildInputs = lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
+                    pkgs.darwin.apple_sdk.frameworks.Security
+                    pkgs.darwin.apple_sdk.frameworks.SystemConfiguration
+                  ];
+                };
+                cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+              in
+              {
+                checks = {
+                  cargo-test = craneLib.cargoTest (
+                    commonArgs
+                    // {
+                      inherit cargoArtifacts;
+                      LICHESS_OPENAPI_SPEC = "${inputs.lichess-api}/doc/specs/lichess-api.yaml";
+                    }
+                  );
+                };
+              };
+          };
+      };
 
       systems = import inputs.systems;
 
