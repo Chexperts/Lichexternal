@@ -44,6 +44,7 @@ toml = "0.8"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "env-filter", "ansi"] }
 anyhow = "1.0"
+open = "5.3"
 
 # Optional TypeScript type export
 ts-rs = "10.0"

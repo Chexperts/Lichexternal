@@ -25,6 +25,7 @@ interprocess = { workspace = true, features = ["tokio"] }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-util", "net"] }
 anyhow = { workspace = true }
 etcetera = { workspace = true }
+open = { workspace = true }
 toml = { workspace = true }
 ring = "0.17"
 base64 = "0.22"
