@@ -74,6 +74,13 @@
                       LICHESS_OPENAPI_SPEC = "${inputs.lichess-api}/doc/specs/lichess-api.yaml";
                     }
                   );
+                  cargo-clippy = craneLib.cargoClippy (
+                    commonArgs
+                    // {
+                      inherit cargoArtifacts;
+                      cargoClippyExtraArgs = "--all-targets --all-features -- --deny warnings";
+                    }
+                  );
                 };
               };
           };
