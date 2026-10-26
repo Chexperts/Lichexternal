@@ -282,6 +282,7 @@
             packages = with pkgs; [
               rustToolchain
               gh
+              nodejs
             ];
           };
         };

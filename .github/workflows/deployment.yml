@@ -13,62 +13,66 @@ permissions:
   id-token: write
 
 jobs:
+  checks:
+    name: "Checks"
+    uses: Malix-Labs/dotfiles/.github/workflows/check.yml@main
+
   publish-crates:
     name: "Publish to crates.io"
+    needs: checks
     runs-on: ubuntu-latest
     steps:
       - name: "Checkout repository"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
-      - name: "Install Rust toolchain"
-        uses: dtolnay/rust-toolchain@stable
+      - name: "Set up Nix"
+        uses: Malix-Labs/dotfiles/.github/actions/nix-setup@main
+        with:
+          reclaim: true
 
       - name: "Publish lichexternal-core"
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: cargo publish -p lichexternal-core || echo "Crate version may already be published"
+        run: nix develop --command cargo publish -p lichexternal-core || echo "Crate version may already be published"
 
   publish-npm-and-assets:
     name: "Publish npm & Release Assets"
+    needs: checks
     runs-on: ubuntu-latest
     steps:
       - name: "Checkout repository"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
-      - name: "Install Nix"
-        uses: DeterminateSystems/nix-installer-action@v16
-
-      - name: "Set up Magic Nix Cache"
-        uses: DeterminateSystems/magic-nix-cache-action@v9
+      - name: "Set up Nix"
+        uses: Malix-Labs/dotfiles/.github/actions/nix-setup@main
+        with:
+          reclaim: true
 
       - name: "Build TypeScript bindings"
         run: nix build .#typescript-bindings
 
       - name: "Upload TypeScript bindings artifact"
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: typescript-bindings
           path: result/
 
-      - name: "Set up Node.js"
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
-      - name: "Upgrade npm for OIDC Trusted Publishing"
-        run: npm install -g npm@latest
-
       - name: "Publish to npm (OIDC Trusted Publishing)"
         run: |
           cd result
-          npm publish --provenance --access public
+          nix develop "$GITHUB_WORKSPACE" --command npm publish --provenance --access public
 
-      - name: "Archive and Attach Release Assets"
+      - name: "Archive Release Assets"
         if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           tar -czf "lichexternal-typescript-bindings-${GITHUB_REF_NAME}.tar.gz" -C result .
-          npm pack ./result
-          gh release view "${GITHUB_REF_NAME}" || gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --generate-notes
-          gh release upload "${GITHUB_REF_NAME}" "lichexternal-typescript-bindings-${GITHUB_REF_NAME}.tar.gz" ./*.tgz --clobber
+          nix develop --command npm pack ./result
+
+      - name: "Attach Release Assets"
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            lichexternal-typescript-bindings-*.tar.gz
+            *.tgz
+          generate_release_notes: true
