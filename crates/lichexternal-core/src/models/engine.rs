@@ -27,12 +27,18 @@ pub struct EngineProfile {
     /// Chess variants supported by this engine.
     #[serde(default)]
     pub variants: Vec<UciVariant>,
-    /// Provider secret used to authenticate work polling on `engine.lichess.ovh`.
+    /// Client secret used to request analysis (returned by Lichess).
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub client_secret: Option<String>,
+    /// Provider secret used to authenticate work polling on `engine.lichess.ovh`.
+    #[serde(alias = "providerSecret", skip_serializing_if = "Option::is_none")]
     pub secret: Option<String>,
     /// Owner user ID on Lichess.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub user_id: Option<String>,
+    /// Arbitrary provider identification data.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider_data: Option<String>,
 }
 
 /// Request body for registering a new external engine profile via `POST /api/external-engine`.

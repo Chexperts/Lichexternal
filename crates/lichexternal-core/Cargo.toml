@@ -24,3 +24,6 @@ typescript = ["dep:ts-rs"]
 [dependencies.ts-rs]
 workspace = true
 optional = true
+
+[dev-dependencies]
+serde_yaml = { workspace = true }
