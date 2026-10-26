@@ -39,7 +39,7 @@ jobs:
         uses: DeterminateSystems/nix-installer-action@v16
 
       - name: "Set up Magic Nix Cache"
-        uses: DeterminateSystems/magic-nix-cache-action@v9
+        uses: DeterminateSystems/magic-nix-cache-action@v15
 
       - name: "Build TypeScript bindings"
         run: nix build .#typescript-bindings
