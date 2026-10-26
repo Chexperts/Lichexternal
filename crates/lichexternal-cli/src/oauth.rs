@@ -1,57 +1,30 @@
 //! Lichess OAuth 2.0 with PKCE (Proof Key for Code Exchange) implementation.
 //!
 //! Handles ephemeral loopback HTTP server, PKCE verifier/challenge generation,
-//! browser launch, authorization code capture, and token exchange.
+//! CSRF state protection, browser launch, authorization code capture, and token exchange.
 
 use anyhow::{bail, Context, Result};
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use base64::Engine;
-use ring::digest::{digest, SHA256};
-use ring::rand::{SecureRandom, SystemRandom};
+use oauth2::basic::BasicClient;
+use oauth2::reqwest::async_http_client;
+use oauth2::{
+    AuthUrl, AuthorizationCode, ClientId, CsrfToken, PkceCodeChallenge, RedirectUrl, Scope,
+    TokenResponse as _, TokenUrl,
+};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
+use url::Url;
 
 pub const DEFAULT_CLIENT_ID: &str = "chexperts-lichexternal";
-pub const DEFAULT_SCOPES: &str = "engine:read engine:write";
+pub const DEFAULT_SCOPES: &[&str] = &["engine:read", "engine:write"];
 
-/// Ephemeral PKCE challenge and verifier pair.
+/// Token response details needed by Lichexternal.
 #[derive(Debug, Clone)]
-pub struct PkcePair {
-    pub verifier: String,
-    pub challenge: String,
-}
-
-impl PkcePair {
-    /// Generates a cryptographically secure random PKCE code verifier and S256 challenge.
-    pub fn generate() -> Result<Self> {
-        let rng = SystemRandom::new();
-        let mut random_bytes = [0u8; 32];
-        rng.fill(&mut random_bytes)
-            .map_err(|_| anyhow::anyhow!("Failed to acquire secure random bytes for PKCE"))?;
-
-        let verifier = URL_SAFE_NO_PAD.encode(random_bytes);
-        let challenge_hash = digest(&SHA256, verifier.as_bytes());
-        let challenge = URL_SAFE_NO_PAD.encode(challenge_hash.as_ref());
-
-        Ok(Self {
-            verifier,
-            challenge,
-        })
-    }
-}
-
-/// Token response returned by `POST https://lichess.org/api/token`.
-#[derive(Debug, Clone, Deserialize)]
-pub struct TokenResponse {
+pub struct TokenDetails {
     pub access_token: String,
-    #[allow(dead_code)]
-    pub token_type: Option<String>,
-    #[allow(dead_code)]
-    pub expires_in: Option<u64>,
     pub scope: Option<String>,
 }
 
@@ -64,62 +37,90 @@ pub struct AccountResponse {
 }
 
 /// Executes interactive OAuth 2.0 PKCE login with Lichess.
-pub async fn login_pkce(
-    base_url: &str,
-    client_id: &str,
-) -> Result<(TokenResponse, Option<String>)> {
-    let pkce = PkcePair::generate().context("Failed to generate PKCE challenge")?;
+pub async fn login_pkce(base_url: &str, client_id: &str) -> Result<(TokenDetails, Option<String>)> {
+    let clean_base = base_url.trim_end_matches('/');
+    let auth_url = AuthUrl::new(format!("{clean_base}/oauth"))
+        .context("Invalid authorization endpoint URL")?;
+    let token_url =
+        TokenUrl::new(format!("{clean_base}/api/token")).context("Invalid token endpoint URL")?;
 
     // Bind local ephemeral TCP listener on loopback
     let listener = TcpListener::bind("127.0.0.1:0")
         .await
         .context("Failed to bind ephemeral loopback TCP listener for OAuth redirect")?;
     let local_addr = listener.local_addr()?;
-    let redirect_uri = format!("http://127.0.0.1:{}/callback", local_addr.port());
+    let redirect_url_str = format!("http://127.0.0.1:{}/callback", local_addr.port());
+    let redirect_url =
+        RedirectUrl::new(redirect_url_str.clone()).context("Invalid redirect URI")?;
 
-    // Authorization URL
-    let auth_url = format!(
-        "{}/oauth?response_type=code&client_id={}&redirect_uri={}&code_challenge={}&code_challenge_method=S256&scope={}",
-        base_url.trim_end_matches('/'),
-        url_encode(client_id),
-        url_encode(&redirect_uri),
-        url_encode(&pkce.challenge),
-        url_encode(DEFAULT_SCOPES)
-    );
+    let client = BasicClient::new(
+        ClientId::new(client_id.to_string()),
+        None,
+        auth_url,
+        Some(token_url),
+    )
+    .set_redirect_uri(redirect_url);
+
+    // Generate PKCE challenge and CSRF token
+    let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
+
+    let mut auth_req = client.authorize_url(CsrfToken::new_random);
+    for scope in DEFAULT_SCOPES {
+        auth_req = auth_req.add_scope(Scope::new(scope.to_string()));
+    }
+    let (authorize_url, csrf_state) = auth_req.set_pkce_challenge(pkce_challenge).url();
 
     println!("\nInitiating Lichess OAuth 2.0 Authorization...\n");
     println!("Opening your default browser to authorize Lichexternal:");
-    println!("  {auth_url}\n");
+    println!("  {authorize_url}\n");
 
-    // Attempt to open browser automatically
-    if let Err(e) = open_browser(&auth_url) {
+    if let Err(e) = open::that(authorize_url.as_str()) {
         println!("Note: Could not open browser automatically: {e}");
         println!("Please manually copy and paste the URL above into your browser.");
     }
 
     println!(
         "Waiting for Lichess authorization callback on {}...",
-        redirect_uri
+        redirect_url_str
     );
 
-    // Wait for the authorization code from the loopback server
-    let (code_tx, code_rx) = oneshot::channel::<Result<String>>();
+    let (code_tx, code_rx) = oneshot::channel::<Result<AuthorizationCode>>();
     let code_tx = Arc::new(tokio::sync::Mutex::new(Some(code_tx)));
+    let expected_state = csrf_state.secret().clone();
 
     tokio::select! {
-        res = listen_for_callback(listener, code_tx) => {
+        res = listen_for_callback(listener, code_tx, expected_state) => {
             if let Err(e) = res {
                 bail!("Callback listener failed: {e}");
             }
         }
         code_result = code_rx => {
-            let code = code_result.context("Failed to receive authorization code from callback")??;
+            let auth_code = code_result.context("Failed to receive authorization code from callback")??;
             println!("✓ Authorization code received! Exchanging for access token...");
 
-            let token_resp = exchange_code_for_token(base_url, client_id, &code, &redirect_uri, &pkce.verifier).await?;
-            let username = fetch_account_username(base_url, &token_resp.access_token).await.ok();
+            let token_res = client
+                .exchange_code(auth_code)
+                .set_pkce_verifier(pkce_verifier)
+                .request_async(async_http_client)
+                .await
+                .context("Lichess OAuth token exchange request failed")?;
 
-            return Ok((token_resp, username));
+            let access_token = token_res.access_token().secret().to_string();
+            let scope = token_res.scopes().map(|s| {
+                s.iter()
+                    .map(|scope| scope.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            });
+
+            let token_details = TokenDetails {
+                access_token: access_token.clone(),
+                scope,
+            };
+
+            let username = fetch_account_username(base_url, &access_token).await.ok();
+
+            return Ok((token_details, username));
         }
     }
 
@@ -128,10 +129,11 @@ pub async fn login_pkce(
 
 async fn listen_for_callback(
     listener: TcpListener,
-    code_tx: Arc<tokio::sync::Mutex<Option<oneshot::Sender<Result<String>>>>>,
+    code_tx: Arc<tokio::sync::Mutex<Option<oneshot::Sender<Result<AuthorizationCode>>>>>,
+    expected_state: String,
 ) -> Result<()> {
     while let Ok((mut socket, _)) = listener.accept().await {
-        let mut buf = [0u8; 2048];
+        let mut buf = [0u8; 4096];
         let n = match socket.read(&mut buf).await {
             Ok(n) if n > 0 => n,
             _ => continue,
@@ -143,7 +145,7 @@ async fn listen_for_callback(
         let _method = parts.next();
         let path = parts.next().unwrap_or("/");
 
-        let (code, error) = parse_query_params(path);
+        let (code, state, error) = parse_query_params(path);
 
         if let Some(err_msg) = error {
             let html = format!(
@@ -160,7 +162,25 @@ async fn listen_for_callback(
                 let _ = tx.send(Err(anyhow::anyhow!("OAuth error from Lichess: {err_msg}")));
             }
             break;
-        } else if let Some(auth_code) = code {
+        }
+
+        if let (Some(auth_code), Some(incoming_state)) = (code, state) {
+            if incoming_state != expected_state {
+                let html =
+                    "HTTP/1.1 400 Bad Request\r\nContent-Type: text/html; charset=utf-8\r\n\r\n\
+                    <html><body style='font-family:sans-serif;text-align:center;padding:50px;'>\
+                    <h2 style='color:#e53e3e;'>CSRF Validation Failed</h2>\
+                    <p>OAuth state mismatch. Request rejected for security.</p>\
+                    </body></html>";
+                let _ = socket.write_all(html.as_bytes()).await;
+                if let Some(tx) = code_tx.lock().await.take() {
+                    let _ = tx.send(Err(anyhow::anyhow!(
+                        "CSRF state mismatch during OAuth callback"
+                    )));
+                }
+                break;
+            }
+
             let html = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n\r\n\
                 <html><body style='font-family:sans-serif;text-align:center;padding:50px;'>\
                 <h2 style='color:#38a169;'>Authentication Successful!</h2>\
@@ -168,73 +188,30 @@ async fn listen_for_callback(
                 </body></html>";
             let _ = socket.write_all(html.as_bytes()).await;
             if let Some(tx) = code_tx.lock().await.take() {
-                let _ = tx.send(Ok(auth_code));
+                let _ = tx.send(Ok(AuthorizationCode::new(auth_code)));
             }
             break;
-        } else {
-            let html = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\n\r\nNot Found";
-            let _ = socket.write_all(html.as_bytes()).await;
         }
+
+        let html = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\n\r\nNot Found";
+        let _ = socket.write_all(html.as_bytes()).await;
     }
     Ok(())
 }
 
-fn parse_query_params(uri: &str) -> (Option<String>, Option<String>) {
-    let Some(query_idx) = uri.find('?') else {
-        return (None, None);
+fn parse_query_params(uri: &str) -> (Option<String>, Option<String>, Option<String>) {
+    let dummy_base = "http://localhost";
+    let full_url = format!("{dummy_base}{uri}");
+    let Ok(parsed) = Url::parse(&full_url) else {
+        return (None, None, None);
     };
-    let query_str = &uri[query_idx + 1..];
-    let mut params = HashMap::new();
 
-    for pair in query_str.split('&') {
-        let mut split = pair.splitn(2, '=');
-        if let (Some(k), Some(v)) = (split.next(), split.next()) {
-            params.insert(k, v);
-        }
-    }
+    let params: HashMap<String, String> = parsed.query_pairs().into_owned().collect();
+    let code = params.get("code").cloned();
+    let state = params.get("state").cloned();
+    let error = params.get("error").cloned();
 
-    let code = params.get("code").map(|s| s.to_string());
-    let error = params.get("error").map(|s| s.to_string());
-    (code, error)
-}
-
-async fn exchange_code_for_token(
-    base_url: &str,
-    client_id: &str,
-    code: &str,
-    redirect_uri: &str,
-    code_verifier: &str,
-) -> Result<TokenResponse> {
-    let token_url = format!("{}/api/token", base_url.trim_end_matches('/'));
-    let client = reqwest::Client::new();
-
-    let params = [
-        ("grant_type", "authorization_code"),
-        ("client_id", client_id),
-        ("code", code),
-        ("redirect_uri", redirect_uri),
-        ("code_verifier", code_verifier),
-    ];
-
-    let resp = client
-        .post(&token_url)
-        .form(&params)
-        .send()
-        .await
-        .with_context(|| format!("Failed to reach Lichess token endpoint '{token_url}'"))?;
-
-    if !resp.status().is_success() {
-        let status = resp.status();
-        let body = resp.text().await.unwrap_or_default();
-        bail!("Lichess token exchange failed ({status}): {body}");
-    }
-
-    let token_resp: TokenResponse = resp
-        .json()
-        .await
-        .context("Failed to deserialize Lichess token response")?;
-
-    Ok(token_resp)
+    (code, state, error)
 }
 
 pub async fn fetch_account_username(base_url: &str, access_token: &str) -> Result<String> {
@@ -260,55 +237,21 @@ pub async fn fetch_account_username(base_url: &str, access_token: &str) -> Resul
     Ok(acc.username)
 }
 
-fn url_encode(input: &str) -> String {
-    let mut encoded = String::with_capacity(input.len());
-    for b in input.bytes() {
-        match b {
-            b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                encoded.push(b as char);
-            }
-            _ => {
-                encoded.push_str(&format!("%{:02X}", b));
-            }
-        }
-    }
-    encoded
-}
-
-fn open_browser(url: &str) -> Result<()> {
-    open::that(url).with_context(|| format!("Failed to open browser with URL: {url}"))?;
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_pkce_generation() {
-        let pair = PkcePair::generate().expect("Should generate PKCE pair");
-        assert!(!pair.verifier.is_empty());
-        assert!(!pair.challenge.is_empty());
-        assert_ne!(pair.verifier, pair.challenge);
-    }
-
-    #[test]
-    fn test_url_encode() {
-        assert_eq!(url_encode("hello world"), "hello%20world");
-        assert_eq!(
-            url_encode("engine:read engine:write"),
-            "engine%3Aread%20engine%3Awrite"
-        );
-    }
-
-    #[test]
     fn test_parse_query_params() {
-        let (code, err) = parse_query_params("/callback?code=abc123xyz&state=something");
+        let (code, state, err) =
+            parse_query_params("/callback?code=abc123xyz&state=my_csrf_secret");
         assert_eq!(code, Some("abc123xyz".to_string()));
+        assert_eq!(state, Some("my_csrf_secret".to_string()));
         assert_eq!(err, None);
 
-        let (code, err) = parse_query_params("/callback?error=access_denied");
+        let (code, state, err) = parse_query_params("/callback?error=access_denied");
         assert_eq!(code, None);
+        assert_eq!(state, None);
         assert_eq!(err, Some("access_denied".to_string()));
     }
 }
