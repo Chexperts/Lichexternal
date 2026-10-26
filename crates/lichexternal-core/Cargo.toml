@@ -6,6 +6,11 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+description = "Core protocol models, UCI parsing, and schemas for Lichess External Engine bridges"
+readme = "README.md"
+documentation = "https://docs.rs/lichexternal-core"
+keywords = ["chess", "lichess", "uci", "engine", "protocol"]
+categories = ["games", "api-bindings", "parser-implementations", "no-std"]
 
 [dependencies]
 serde = { workspace = true, features = ["derive"] }
