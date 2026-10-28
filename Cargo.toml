@@ -17,6 +17,16 @@ repository = "https://github.com/Chexperts/Lichexternal"
 [workspace.metadata.crane]
 name = "lichexternal"
 
+[workspace.metadata.release]
+push = true
+publish = false
+tag = true
+tag-prefix = "v"
+sign-commit = false
+sign-tag = false
+pre-release-commit-message = "chore(release): bump version to {{version}}"
+tag-message = "Release {{version}}"
+
 [workspace.dependencies]
 # Internal workspace crates
 lichexternal-core = { path = "crates/lichexternal-core" }

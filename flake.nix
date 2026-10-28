@@ -281,6 +281,7 @@
             ];
             packages = with pkgs; [
               rustToolchain
+              cargo-release
               gh
               nodejs
             ];
