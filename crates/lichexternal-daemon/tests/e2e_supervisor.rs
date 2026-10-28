@@ -178,10 +178,22 @@ done
         "Engine session should have returned to Idle after finishing work"
     );
 
+    // Wait briefly for at least one subsequent poll to occur while in Idle
+    let poll_start = std::time::Instant::now();
+    while poll_start.elapsed() < Duration::from_secs(5) {
+        if poll_count.load(Ordering::SeqCst) >= 2 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+
     // 5. Trigger clean shutdown and wait for exit
     shutdown_tx.send(true).expect("Failed to send shutdown");
     handle.await.expect("Session task panicked");
 
     assert_eq!(*state_rx.borrow(), SessionState::Stopped);
-    assert!(poll_count.load(Ordering::SeqCst) >= 2);
+    assert!(
+        poll_count.load(Ordering::SeqCst) >= 2,
+        "Expected at least 2 polls (1 work + >=1 subsequent poll)"
+    );
 }
