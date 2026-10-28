@@ -49,7 +49,7 @@ etcetera = "0.8"
 clap = { version = "4.5", default-features = false, features = ["derive", "std", "help", "usage", "error-context"] }
 anstyle = "1.0"
 anstream = "0.6"
-tabled = { version = "0.17", default-features = false, features = ["derive", "std"] }
+tabled = { version = "0.22", default-features = false, features = ["derive", "std"] }
 toml = "0.8"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "env-filter", "ansi"] }
