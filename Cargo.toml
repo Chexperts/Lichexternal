@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "crates/chexperts-uci",
     "crates/lichexternal-core",
     "crates/lichexternal-daemon",
     "crates/lichexternal-cli",
@@ -29,6 +30,7 @@ tag-message = "Release {{version}}"
 
 [workspace.dependencies]
 # Internal workspace crates
+chexperts-uci = { path = "crates/chexperts-uci" }
 lichexternal-core = { path = "crates/lichexternal-core" }
 
 # Serialization & Models

@@ -195,6 +195,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "chexperts-uci"
+version = "0.1.2"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "chrono"
 version = "0.4.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1018,6 +1025,7 @@ dependencies = [
 name = "lichexternal-core"
 version = "0.1.2"
 dependencies = [
+ "chexperts-uci",
  "etcetera",
  "memchr",
  "serde",

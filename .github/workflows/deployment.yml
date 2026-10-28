@@ -60,6 +60,11 @@ jobs:
         with:
           reclaim: true
 
+      - name: "Publish chexperts-uci"
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: nix develop --command cargo publish -p chexperts-uci || echo "Crate version may already be published"
+
       - name: "Publish lichexternal-core"
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}

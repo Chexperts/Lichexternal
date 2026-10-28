@@ -8,7 +8,9 @@ use tracing::{debug, error, info, warn};
 
 use lichexternal_core::config::{BackendType, EngineConfig};
 use lichexternal_core::models::{AcquireResponse, EngineMetadata, UciVariant};
-use lichexternal_core::uci::{parse_uci_line, PositionInitial, UciCommand, UciOutputLine};
+use lichexternal_core::uci::{
+    parse_uci_line, GoParams, PositionInitial, UciCommand, UciOutputLine,
+};
 
 use crate::backend::{AnyBackend, EngineBackend, SocketBackend, StdioBackend};
 use crate::broker::{BrokerClient, BrokerError};
@@ -145,10 +147,7 @@ impl EngineSession {
                     UciOutputLine::IdName(name) => engine_name = Some(name.to_string()),
                     UciOutputLine::IdAuthor(author) => engine_author = Some(author.to_string()),
                     UciOutputLine::Option(opt) => {
-                        if let Some(opt_name) = opt.strip_prefix("name ") {
-                            let name = opt_name.split_whitespace().next().unwrap_or_default();
-                            available_options.push(name.to_string());
-                        }
+                        available_options.push(opt.name.to_string());
                     }
                     _ => {}
                 },
@@ -170,11 +169,7 @@ impl EngineSession {
         for (name, value) in &self.config.uci_options {
             backend
                 .send_command(
-                    &UciCommand::SetOption {
-                        name: name.clone(),
-                        value: Some(value.clone()),
-                    }
-                    .to_uci_line(),
+                    &UciCommand::set_option_owned(name.clone(), Some(value.clone())).to_uci_line(),
                 )
                 .await?;
         }
@@ -264,42 +259,32 @@ impl EngineSession {
         let threads = min(work.threads, self.config.max_threads);
         backend
             .send_command(
-                &UciCommand::SetOption {
-                    name: "Threads".into(),
-                    value: Some(threads.to_string()),
-                }
-                .to_uci_line(),
+                &UciCommand::set_option_owned("Threads".into(), Some(threads.to_string()))
+                    .to_uci_line(),
             )
             .await?;
 
         let hash = min(work.hash, self.config.max_hash);
         backend
             .send_command(
-                &UciCommand::SetOption {
-                    name: "Hash".into(),
-                    value: Some(hash.to_string()),
-                }
-                .to_uci_line(),
+                &UciCommand::set_option_owned("Hash".into(), Some(hash.to_string())).to_uci_line(),
             )
             .await?;
 
         backend
             .send_command(
-                &UciCommand::SetOption {
-                    name: "MultiPV".into(),
-                    value: Some(work.multi_pv.to_string()),
-                }
-                .to_uci_line(),
+                &UciCommand::set_option_owned("MultiPV".into(), Some(work.multi_pv.to_string()))
+                    .to_uci_line(),
             )
             .await?;
 
         if work.variant != UciVariant::Chess {
             backend
                 .send_command(
-                    &UciCommand::SetOption {
-                        name: "UCI_Variant".into(),
-                        value: Some(work.variant.as_uci_str().into()),
-                    }
+                    &UciCommand::set_option_owned(
+                        "UCI_Variant".into(),
+                        Some(work.variant.as_uci_str().into()),
+                    )
                     .to_uci_line(),
                 )
                 .await?;
@@ -321,20 +306,28 @@ impl EngineSession {
 
         // Set position
         let initial = match work.initial_fen {
-            Some(fen) => PositionInitial::Fen(fen),
+            Some(fen) => PositionInitial::fen_owned(fen),
             None => PositionInitial::Startpos,
         };
-        let pos_cmd = UciCommand::Position {
-            initial,
-            moves: work.moves,
-        };
+        let moves = work
+            .moves
+            .into_iter()
+            .map(std::borrow::Cow::Owned)
+            .collect();
+        let pos_cmd = UciCommand::Position { initial, moves };
         backend.send_command(&pos_cmd.to_uci_line()).await?;
 
         // Open streaming transmitter to broker
         let mut transmitter = self.broker_client.start_work_stream(&work_id);
 
         // Start search
-        let go_cmd = UciCommand::Go(work.search_limit);
+        let go_params = GoParams {
+            depth: work.search_limit.depth,
+            movetime: work.search_limit.movetime,
+            nodes: work.search_limit.nodes,
+            ..Default::default()
+        };
+        let go_cmd = UciCommand::Go(go_params);
         backend.send_command(&go_cmd.to_uci_line()).await?;
 
         // Calculation & streaming loop

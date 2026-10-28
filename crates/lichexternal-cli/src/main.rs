@@ -391,15 +391,7 @@ async fn main() -> anyhow::Result<()> {
                         UciOutputLine::IdName(n) => name = Some(n.to_string()),
                         UciOutputLine::IdAuthor(a) => author = Some(a.to_string()),
                         UciOutputLine::Option(opt) => {
-                            if let Some(opt_name) = opt.strip_prefix("name ") {
-                                options.push(
-                                    opt_name
-                                        .split_whitespace()
-                                        .next()
-                                        .unwrap_or_default()
-                                        .to_string(),
-                                );
-                            }
+                            options.push(opt.name.to_string());
                         }
                         _ => {}
                     },

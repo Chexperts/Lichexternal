@@ -1,0 +1,21 @@
+[package]
+name = "chexperts-uci"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Universal Chess Interface (UCI) protocol parser and serializer: zero-copy, 100% spec-compliant, and no-std compatible."
+readme = "README.md"
+documentation = "https://docs.rs/chexperts-uci"
+keywords = ["chess", "uci", "engine", "parser", "zero-copy"]
+categories = ["games", "parser-implementations", "no-std"]
+
+[dependencies]
+memchr = { workspace = true, optional = true }
+
+[features]
+default = ["std", "memchr"]
+std = ["memchr?/std"]
+memchr = ["dep:memchr"]

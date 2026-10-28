@@ -13,6 +13,7 @@ keywords = ["chess", "lichess", "uci", "engine", "protocol"]
 categories = ["games", "api-bindings", "parser-implementations", "no-std"]
 
 [dependencies]
+chexperts-uci = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
@@ -22,8 +23,8 @@ etcetera = { workspace = true, optional = true }
 
 [features]
 default = ["std", "uci"]
-std = ["serde/std", "dep:toml", "dep:etcetera"]
-uci = ["dep:memchr"]
+std = ["chexperts-uci/std", "serde/std", "dep:toml", "dep:etcetera"]
+uci = ["chexperts-uci/memchr", "dep:memchr"]
 typescript = ["dep:ts-rs"]
 
 [dependencies.ts-rs]
